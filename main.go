@@ -35,7 +35,7 @@ func main() {
 	exitOnErr(err)
 
 	for _, c := range scan {
-		println(fmt.Sprintf("git cherry-pick %s # %s", c.SHA, c.Title))
+		println(fmt.Sprintf("git cherry-pick %s # %s", c.SHA(), c.Title()))
 	}
 
 }
