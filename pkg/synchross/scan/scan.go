@@ -3,6 +3,8 @@ package scan
 import (
 	"context"
 	"fmt"
+	"regexp"
+	"strconv"
 	"strings"
 
 	"github.com/google/go-github/v56/github"
@@ -11,6 +13,31 @@ import (
 )
 
 const IgnoreCommitMarker = "SYNC_IGNORE"
+
+func searchPullRequestLinks(org, repo, text string) ([]int, error) {
+	var res []int
+
+	var PullRequestLinkInTextStyles = []*regexp.Regexp{
+		regexp.MustCompile(fmt.Sprintf(`%s/%s#(\d+)`, org, repo)),
+		regexp.MustCompile(fmt.Sprintf(`github.com/%s/%s/pull/(\d+)`, org, repo)),
+		regexp.MustCompile(fmt.Sprintf(`\[%s#(\d+)\]`, org)),
+	}
+
+	for _, s := range PullRequestLinkInTextStyles {
+		matches := s.FindAllStringSubmatch(text, -1)
+		for _, m := range matches {
+			if len(m) == 2 {
+				num, err := strconv.Atoi(m[1])
+				if err != nil {
+					return nil, err
+				}
+				res = append(res, num)
+			}
+		}
+	}
+
+	return res, nil
+}
 
 func iteratePullRequestsByCommitSHA(ctx context.Context, client *github.Client, org, repo, sha string) utils.SeqIterator[github.PullRequest] {
 	it := utils.NewGithubSeqIterator(
@@ -32,10 +59,10 @@ func iterateCommitsByHead(ctx context.Context, client *github.Client, org, repo,
 		})
 }
 
-func commitLinksAreAmbiguos(links []*utils.PullRequestLink) bool {
+func commitLinksAreAmbiguos(links []int) bool {
 	if len(links) > 1 {
 		for i := 1; i < len(links); i++ {
-			if links[i].Num != links[0].Num {
+			if links[i] != links[0] {
 				return true
 			}
 		}
@@ -47,7 +74,7 @@ func commitLinksAreAmbiguos(links []*utils.PullRequestLink) bool {
 func searchForkCommitLink(ctx context.Context, client *github.Client, req *ScanRequest, c *CommitInfo) (int, error) {
 	// search in pull request body
 	for _, pr := range c.PullRequestsOfRepo(req.ForkOrg, req.ForkRepo) {
-		links, err := utils.SearchPullRequestLinks(req.BaseOrg, req.BaseRepo, pr.GetBody())
+		links, err := searchPullRequestLinks(req.BaseOrg, req.BaseRepo, pr.GetBody())
 		if err != nil {
 			return 0, err
 		}
@@ -57,12 +84,12 @@ func searchForkCommitLink(ctx context.Context, client *github.Client, req *ScanR
 		}
 		if len(links) > 0 {
 			logrus.Infof("found link in pull request body #%d", pr.GetNumber())
-			return links[0].Num, nil
+			return links[0], nil
 		}
 	}
 
 	// search in commit message
-	links, err := utils.SearchPullRequestLinks(req.BaseOrg, req.BaseRepo, c.Message())
+	links, err := searchPullRequestLinks(req.BaseOrg, req.BaseRepo, c.Message())
 	if err != nil {
 		return 0, err
 	}
@@ -72,7 +99,7 @@ func searchForkCommitLink(ctx context.Context, client *github.Client, req *ScanR
 	}
 	if len(links) > 0 {
 		logrus.Infof("found link in commit message of %s", c.SHA())
-		return links[0].Num, nil
+		return links[0], nil
 	}
 
 	// search in commit comments
@@ -81,7 +108,7 @@ func searchForkCommitLink(ctx context.Context, client *github.Client, req *ScanR
 		return 0, err
 	}
 	for _, comment := range comments {
-		links, err := utils.SearchPullRequestLinks(req.BaseOrg, req.BaseRepo, comment.GetBody())
+		links, err := searchPullRequestLinks(req.BaseOrg, req.BaseRepo, comment.GetBody())
 		if err != nil {
 			return 0, err
 		}
@@ -91,7 +118,7 @@ func searchForkCommitLink(ctx context.Context, client *github.Client, req *ScanR
 		}
 		if len(links) > 0 {
 			logrus.Infof("found link in one comment body of %s", c.SHA())
-			return links[0].Num, nil
+			return links[0], nil
 		}
 	}
 
