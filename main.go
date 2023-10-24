@@ -48,7 +48,7 @@ func main() {
 	// })
 	// exitOnErr(err)
 
-	err := rerere.Pull("origin", fmt.Sprintf("%s-rerere-cache", utils.ProjectName))
+	err := rerere.Push("origin", fmt.Sprintf("%s-rerere-cache", utils.ProjectName))
 	exitOnErr(err)
 
 }

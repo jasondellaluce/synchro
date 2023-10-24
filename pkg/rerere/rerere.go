@@ -3,6 +3,7 @@ package rerere
 import (
 	"fmt"
 	"os"
+	"path/filepath"
 	"strings"
 
 	"github.com/hashicorp/go-multierror"
@@ -51,6 +52,7 @@ func Pull(remote, branch string) error {
 
 // Pushes in the local git repo the `git rerere` cache from a remote branch.
 func Push(remote, branch string) error {
+	// todo: prevent this from happening with unclean working tree
 	logrus.Info("checking out rerere cache branch")
 	localBranch := fmt.Sprintf("tmp-%s-rerere-cache", utils.ProjectName)
 	return withTempLocalBranch(localBranch, remote, branch, func(exists bool) error {
@@ -75,6 +77,12 @@ func Push(remote, branch string) error {
 			return err
 		}
 		if hasChanges {
+			defer func() {
+				// TODO: this does not work properly yet
+				logrus.Debug("cleaning up working tree")
+				git.Raw("reset", simpleArg("--hard"))
+			}()
+
 			logrus.Debug("staging new changes")
 			out, err := git.Raw("add", simpleArg(branchCacheDir))
 			if err != nil {
@@ -130,6 +138,7 @@ func withTempLocalBranch(localBranch, remote, remoteBranch string, f func(bool) 
 			return "", err
 		}
 		if exists {
+			// todo: checkout only the directory
 			ref := fmt.Sprintf("%s/%s", remote, remoteBranch)
 			return git.Checkout(checkout.NewBranch(localBranch), checkout.Branch(ref))
 		} else {
@@ -178,6 +187,22 @@ func checkoutLocalOrphanBranch(branch string) error {
 	if err != nil {
 		return err
 	}
+	_, err = git.Raw("reset")
+	if err != nil {
+		return err
+	}
+	wd, err := os.Getwd()
+	if err != nil {
+		return err
+	}
+	err = removeAll(wd)
+	if err != nil {
+		return err
+	}
+	_, err = git.Raw("add", simpleArg("-A"))
+	if err != nil {
+		return err
+	}
 	_, err = git.Commit(commit.AllowEmpty, commit.Message("initial commit"))
 	return err
 }
@@ -197,4 +222,15 @@ func simpleArg(args ...string) func(*types.Cmd) {
 			g.AddOptions(arg)
 		}
 	}
+}
+
+func removeAll(dir string) error {
+	return filepath.Walk(dir, func(path string, info os.FileInfo, err error) error {
+		if err == nil && path != dir && !strings.Contains(path, "/.git") && !strings.Contains(path, "/build") {
+			if !info.IsDir() {
+				return os.RemoveAll(path)
+			}
+		}
+		return err
+	})
 }
