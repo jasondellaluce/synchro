@@ -7,7 +7,7 @@ import (
 
 	"github.com/google/go-github/v56/github"
 	"github.com/hashicorp/go-multierror"
-	"github.com/jasondellaluce/synchross/pkg/synchross/utils"
+	"github.com/jasondellaluce/synchross/pkg/utils"
 )
 
 type ScanRequest struct {
@@ -75,7 +75,7 @@ func (c *CommitInfo) PullRequestsOfRepo(org, repo string) []*github.PullRequest 
 func (c *CommitInfo) GetComments(ctx context.Context, client *github.Client, org, repo string) ([]*github.RepositoryComment, error) {
 	repoName := fmt.Sprintf("%s/%s", org, repo)
 	if c.commentsRepo != repoName {
-		comments, err := utils.CollectSeq(utils.NewGithubSeqIterator(
+		comments, err := utils.CollectSequence(utils.NewGithubSequence(
 			func(o *github.ListOptions) ([]*github.RepositoryComment, *github.Response, error) {
 				return client.Repositories.ListCommitComments(ctx, org, repo, c.SHA(), o)
 			}))
