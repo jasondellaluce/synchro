@@ -10,6 +10,7 @@ import (
 	"github.com/jasondellaluce/synchross/pkg/utils"
 )
 
+// ScanRequest contains all the info required for performing a fork scan
 type ScanRequest struct {
 	BaseOrg     string
 	BaseRepo    string
@@ -18,6 +19,7 @@ type ScanRequest struct {
 	ForkHeadRef string
 }
 
+// Error returns a non-nil error in case something is wrong with the scan request.
 func (s *ScanRequest) Error() error {
 	var err error
 	if len(s.BaseOrg) == 0 {
@@ -38,9 +40,12 @@ func (s *ScanRequest) Error() error {
 	return err
 }
 
+// CommitInfo contains information about a single commit resulting from a fork
+// scan and provides receiver accessors for information about it
 type CommitInfo struct {
 	Commit       *github.RepositoryCommit
 	PullRequests []*github.PullRequest
+	// internal use
 	comments     []*github.RepositoryComment
 	commentsRepo string
 }
