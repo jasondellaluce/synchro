@@ -1,4 +1,4 @@
-module github.com/jasondellaluce/synchross
+module github.com/jasondellaluce/synchro
 
 go 1.21.3
 

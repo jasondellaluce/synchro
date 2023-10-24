@@ -7,7 +7,7 @@ import (
 
 	"github.com/google/go-github/v56/github"
 	"github.com/hashicorp/go-multierror"
-	"github.com/jasondellaluce/synchross/pkg/utils"
+	"github.com/jasondellaluce/synchro/pkg/utils"
 )
 
 // ScanRequest contains all the info required for performing a fork scan

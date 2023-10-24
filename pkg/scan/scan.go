@@ -8,7 +8,7 @@ import (
 	"strings"
 
 	"github.com/google/go-github/v56/github"
-	"github.com/jasondellaluce/synchross/pkg/utils"
+	"github.com/jasondellaluce/synchro/pkg/utils"
 	"github.com/sirupsen/logrus"
 )
 

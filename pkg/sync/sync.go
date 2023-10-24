@@ -7,8 +7,8 @@ import (
 	"strings"
 
 	"github.com/hashicorp/go-multierror"
-	"github.com/jasondellaluce/synchross/pkg/scan"
-	"github.com/jasondellaluce/synchross/pkg/utils"
+	"github.com/jasondellaluce/synchro/pkg/scan"
+	"github.com/jasondellaluce/synchro/pkg/utils"
 	"github.com/ldez/go-git-cmd-wrapper/v2/git"
 	"github.com/ldez/go-git-cmd-wrapper/v2/reset"
 	"github.com/sirupsen/logrus"

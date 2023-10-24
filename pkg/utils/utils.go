@@ -1,6 +1,6 @@
 package utils
 
-const ProjectName = "synchross"
+const ProjectName = "synchro"
 
 func ReverseSlice[S ~[]E, E any](s S) {
 	for i, j := 0, len(s)-1; i < j; i, j = i+1, j-1 {

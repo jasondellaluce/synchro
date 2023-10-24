@@ -6,8 +6,8 @@ import (
 	"os"
 
 	"github.com/google/go-github/v56/github"
-	"github.com/jasondellaluce/synchross/pkg/scan"
-	"github.com/jasondellaluce/synchross/pkg/sync"
+	"github.com/jasondellaluce/synchro/pkg/scan"
+	"github.com/jasondellaluce/synchro/pkg/sync"
 	"github.com/sirupsen/logrus"
 )
 
