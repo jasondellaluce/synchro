@@ -58,6 +58,10 @@ func (c *CommitInfo) SHA() string {
 	return c.Commit.GetSHA()
 }
 
+func (c *CommitInfo) ShortSHA() string {
+	return c.SHA()[:8]
+}
+
 func (c *CommitInfo) AuthorLogin() string {
 	return c.Commit.GetAuthor().GetLogin()
 }

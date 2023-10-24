@@ -26,6 +26,7 @@ func Scan(ctx context.Context, client *github.Client, req *ScanRequest) ([]*Comm
 	if err != nil {
 		return nil, err
 	}
+	defer logrus.Infof("finished fork scan for repository %s/%s with base %s/%s", req.ForkOrg, req.ForkRepo, req.BaseOrg, req.BaseRepo)
 
 	// iterate through the commits of the fork
 	var result []*CommitInfo

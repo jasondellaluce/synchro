@@ -10,6 +10,7 @@ import (
 	"github.com/ldez/go-git-cmd-wrapper/v2/git"
 	"github.com/ldez/go-git-cmd-wrapper/v2/remote"
 	"github.com/ldez/go-git-cmd-wrapper/v2/revparse"
+	"github.com/ldez/go-git-cmd-wrapper/v2/types"
 	"github.com/sirupsen/logrus"
 )
 
@@ -18,7 +19,7 @@ import (
 func doGit(level logrus.Level, f func() (string, error)) error {
 	out, err := f()
 	if len(out) > 0 {
-		logrus.StandardLogger().Log(level, out)
+		logrus.StandardLogger().Log(level, strings.TrimSpace(out))
 	}
 	return err
 }
@@ -100,7 +101,7 @@ func withTempLocalBranch(localBranch, remoteBranch string, f func() error) error
 	}
 
 	// delete on exit
-	defer delete()
+	//defer delete()
 
 	// get back to original branch on exit
 	defer func() {
@@ -111,4 +112,12 @@ func withTempLocalBranch(localBranch, remoteBranch string, f func() error) error
 	}()
 
 	return f()
+}
+
+func simpleArg(args ...string) func(*types.Cmd) {
+	return func(g *types.Cmd) {
+		for _, arg := range args {
+			g.AddOptions(arg)
+		}
+	}
 }
