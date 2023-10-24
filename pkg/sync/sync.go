@@ -78,17 +78,37 @@ func syncAllPatches(ctx context.Context, req *SyncRequest) error {
 
 			// todo: mark the commit someway and print a list of fixup
 			// at the end of the sync process
-			continueError := doGit(logrus.DebugLevel, func() (string, error) {
-				// note: we allow empty commits because we want to annotate
-				// them in case of weird fixups
-				return git.Raw("commit", simpleArg("--allow-empty"))
-			})
-			if continueError != nil {
-				return multierror.Append(err, continueError, abortCherryPick())
+
+			hasChanges, errHasChanges := hasLocalChanges()
+			if errHasChanges != nil {
+				return multierror.Append(err, errHasChanges, abortCherryPick())
+			}
+
+			if !hasChanges {
+				abortErr := abortCherryPick()
+				if abortErr != nil {
+					return multierror.Append(err, abortErr)
+				}
+			} else {
+				continueError := doGit(logrus.DebugLevel, func() (string, error) {
+					return git.Raw("cherry-pick", simpleArg("--continue"))
+				})
+				if continueError != nil {
+					return multierror.Append(err, continueError, abortCherryPick())
+				}
 			}
 		}
 	}
 	return nil
+}
+
+func hasLocalChanges() (bool, error) {
+	logrus.Debugf("git status --porcelain")
+	out, err := git.Raw("status", simpleArg("--porcelain"))
+	if err != nil {
+		return false, err
+	}
+	return len(strings.TrimSpace(out)) != 0, nil
 }
 
 func listUnmergedFiles() ([]string, error) {
