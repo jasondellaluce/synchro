@@ -101,7 +101,8 @@ func withTempLocalBranch(localBranch, remoteBranch string, f func() error) error
 	}
 
 	// delete on exit
-	//defer delete()
+	// todo: make this optional with --cleanup-branch maybe?
+	// defer delete()
 
 	// get back to original branch on exit
 	defer func() {
