@@ -3,12 +3,23 @@ package sync
 import (
 	"fmt"
 
+	"github.com/hashicorp/go-multierror"
 	"github.com/jasondellaluce/synchro/pkg/utils"
 	"github.com/sirupsen/logrus"
 )
 
+func requireNoLocalChanges(git utils.GitHelper) error {
+	if localChanges, err := git.HasLocalChanges(); err != nil || localChanges {
+		if localChanges {
+			err = multierror.Append(err, fmt.Errorf("local changes must be stashed, committed, or removed"))
+		}
+		return err
+	}
+	return nil
+}
+
 func withTempGitRemote(git utils.GitHelper, remote, url string, f func() error) error {
-	logrus.Infof("adding temporary git remote for '%s'" + url)
+	logrus.Infof("adding temporary git remote for '%s'", url)
 
 	// remove remote if it exists already
 	git.Do("remote", "remove", remote)
@@ -35,7 +46,7 @@ func withTempGitRemote(git utils.GitHelper, remote, url string, f func() error) 
 	return f()
 }
 
-func withTempLocalBranch(git utils.GitHelper, localBranch, remote, remoteBranch string, f func() (bool, error)) error {
+func withTempLocalBranch(git utils.GitHelper, localBranch, remote, remoteBranch string, f func() error) error {
 	remoteRef := fmt.Sprintf("%s/%s", remote, remoteBranch)
 	logrus.Infof("moving into local branch '%s' tracking '%s'", localBranch, remoteRef)
 
@@ -50,7 +61,7 @@ func withTempLocalBranch(git utils.GitHelper, localBranch, remote, remoteBranch 
 	// move to the default branch
 	if curBranch == localBranch {
 		logrus.Debugf("already on the local branch, moving to the default one")
-		remoteDefaultBranch, err := git.GetRemoteDefaultBranch(remote)
+		remoteDefaultBranch, err := git.GetRemoteDefaultBranch("origin")
 		if err != nil {
 			return err
 		}
@@ -65,14 +76,6 @@ func withTempLocalBranch(git utils.GitHelper, localBranch, remote, remoteBranch 
 	logrus.Debugf("deleting local branch '%s' in case it exists", localBranch)
 	git.Do("branch", "-D", localBranch)
 
-	// delete on exit if necessary
-	deleteOnExit := false
-	defer func() {
-		if deleteOnExit {
-			git.Do("branch", "-D", localBranch)
-		}
-	}()
-
 	// checkout remote branch into local one
 	err = git.Do("checkout", "-b", localBranch, remoteRef)
 	if err != nil {
@@ -83,6 +86,5 @@ func withTempLocalBranch(git utils.GitHelper, localBranch, remote, remoteBranch 
 	defer func() { git.Do("checkout", curBranch) }()
 
 	// run callback
-	deleteOnExit, err = f()
-	return err
+	return f()
 }

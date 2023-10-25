@@ -35,7 +35,7 @@ func Scan(ctx context.Context, client *github.Client, req *ScanRequest) ([]*Comm
 			info, err := scanRepoCommit(ctx, client, req, c)
 			if err == nil {
 				if info != nil {
-					basePRs := info.PullRequestsOfRepo(req.BaseOrg, req.BaseRepo)
+					basePRs := info.pullRequestsOfRepo(req.BaseOrg, req.BaseRepo)
 					if len(info.PullRequests) == 1 && len(basePRs) == 1 && basePRs[0].MergedAt != nil {
 						logrus.Debugf("commit is only part of a base repo PR, stopping")
 						return utils.ErrSeqBreakout
@@ -77,7 +77,7 @@ func scanRepoCommit(ctx context.Context, client *github.Client, req *ScanRequest
 		return nil, err
 	}
 	if ref != 0 {
-		logrus.Debugf("checking refed pull request %s/%s#%d", req.BaseOrg, req.BaseRepo, ref)
+		logrus.Debugf("checking ref pull request %s/%s#%d", req.BaseOrg, req.BaseRepo, ref)
 		pr, _, err := client.PullRequests.Get(ctx, req.BaseOrg, req.BaseRepo, ref)
 		if err != nil {
 			return nil, err
@@ -155,13 +155,13 @@ func commitRefsAreAmbiguos(refs []int) bool {
 func searchPullRequestRefs(org, repo, text string) ([]int, error) {
 	var res []int
 
-	var PullRequestRefInTextStyles = []*regexp.Regexp{
+	var pullRequestRefInTextStyles = []*regexp.Regexp{
 		regexp.MustCompile(fmt.Sprintf(`%s/%s#(\d+)`, org, repo)),
 		regexp.MustCompile(fmt.Sprintf(`github.com/%s/%s/pull/(\d+)`, org, repo)),
 		regexp.MustCompile(fmt.Sprintf(`\[%s#(\d+)\]`, org)),
 	}
 
-	for _, s := range PullRequestRefInTextStyles {
+	for _, s := range pullRequestRefInTextStyles {
 		matches := s.FindAllStringSubmatch(text, -1)
 		for _, m := range matches {
 			if len(m) == 2 {
@@ -180,7 +180,7 @@ func searchPullRequestRefs(org, repo, text string) ([]int, error) {
 // returns the pull request number relative to the base repo
 func searchForkCommitRef(ctx context.Context, client *github.Client, req *ScanRequest, c *CommitInfo) (int, error) {
 	// search in pull request body
-	for _, pr := range c.PullRequestsOfRepo(req.ForkOrg, req.ForkRepo) {
+	for _, pr := range c.pullRequestsOfRepo(req.ForkOrg, req.ForkRepo) {
 		refs, err := searchPullRequestRefs(req.BaseOrg, req.BaseRepo, pr.GetBody())
 		if err != nil {
 			return 0, err
@@ -210,7 +210,7 @@ func searchForkCommitRef(ctx context.Context, client *github.Client, req *ScanRe
 	}
 
 	// search in commit comments
-	comments, err := c.GetComments(ctx, client, req.ForkOrg, req.ForkRepo)
+	comments, err := c.getComments(ctx, client, req.ForkOrg, req.ForkRepo)
 	if err != nil {
 		return 0, err
 	}
@@ -234,7 +234,7 @@ func searchForkCommitRef(ctx context.Context, client *github.Client, req *ScanRe
 
 // returns true if the commit should be ignored for the given scan request
 func checkCommitShouldBeIgnored(ctx context.Context, client *github.Client, req *ScanRequest, c *CommitInfo) (bool, error) {
-	comments, err := c.GetComments(ctx, client, req.ForkOrg, req.ForkRepo)
+	comments, err := c.getComments(ctx, client, req.ForkOrg, req.ForkRepo)
 	if err != nil {
 		return false, err
 	}

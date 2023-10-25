@@ -70,7 +70,7 @@ func (c *CommitInfo) Title() string {
 	return strings.Split(c.Message(), "\n")[0]
 }
 
-func (c *CommitInfo) PullRequestsOfRepo(org, repo string) []*github.PullRequest {
+func (c *CommitInfo) pullRequestsOfRepo(org, repo string) []*github.PullRequest {
 	var res []*github.PullRequest
 	fullName := fmt.Sprintf("%s/%s", org, repo)
 	for _, pr := range c.PullRequests {
@@ -81,7 +81,7 @@ func (c *CommitInfo) PullRequestsOfRepo(org, repo string) []*github.PullRequest 
 	return res
 }
 
-func (c *CommitInfo) GetComments(ctx context.Context, client *github.Client, org, repo string) ([]*github.RepositoryComment, error) {
+func (c *CommitInfo) getComments(ctx context.Context, client *github.Client, org, repo string) ([]*github.RepositoryComment, error) {
 	repoName := fmt.Sprintf("%s/%s", org, repo)
 	if c.commentsRepo != repoName {
 		comments, err := utils.CollectSequence(utils.NewGithubSequence(

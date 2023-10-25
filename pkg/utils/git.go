@@ -83,7 +83,7 @@ func (g *gitHelper) HasLocalChanges(filters ...func(string) bool) (bool, error) 
 }
 
 func (g *gitHelper) ListUnmergedFiles() ([]string, error) {
-	out, err := g.DoOutput("diff", "diff", "--name-only", "--diff-filter=U", "--relative")
+	out, err := g.DoOutput("diff", "--name-only", "--diff-filter=U", "--relative")
 	if err != nil {
 		return nil, err
 	}
@@ -118,7 +118,7 @@ func (g *gitHelper) GetRemoteDefaultBranch(remote string) (string, error) {
 	if len(out) == 0 {
 		return "", fmt.Errorf("can't retrieve default branch for remote '%s'", remote)
 	}
-	return out, nil
+	return strings.TrimPrefix(out, remote+"/"), nil
 }
 
 func (g *gitHelper) BranchExistsInRemote(remote, branch string) (bool, error) {

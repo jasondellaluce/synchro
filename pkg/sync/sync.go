@@ -19,20 +19,21 @@ type SyncRequest struct {
 	SyncBranch  string
 }
 
-func Sync(ctx context.Context, git utils.GitHelper, req *SyncRequest, removeBranch bool) error {
+func Sync(ctx context.Context, git utils.GitHelper, req *SyncRequest) error {
+	if err := requireNoLocalChanges(git); err != nil {
+		return err
+	}
+
 	// todo: check that origin remote is the actual repo of fork in req request
-	// todo: make "origin" settable
-	logrus.Infof("initiating fork sync for repository %s/%s with base %s/%s", req.Scan.ForkOrg, req.Scan.ForkRepo, req.Scan.BaseOrg, req.Scan.BaseRepo)
-	defer logrus.Infof("finished fork sync for repository %s/%s with base %s/%s", req.Scan.ForkOrg, req.Scan.ForkRepo, req.Scan.BaseOrg, req.Scan.BaseRepo)
 
 	remoteName := fmt.Sprintf("temp-%s-sync-base-remote", utils.ProjectName)
 	remoteURL := fmt.Sprintf("https://github.com/%s/%s", req.Scan.BaseOrg, req.Scan.BaseRepo)
+	logrus.Infof("initiating fork sync for repository %s/%s with base %s/%s", req.Scan.ForkOrg, req.Scan.ForkRepo, req.Scan.BaseOrg, req.Scan.BaseRepo)
 	return withTempGitRemote(git, remoteName, remoteURL, func() error {
-		localBranchName := fmt.Sprintf("temp-%s-sync-%s-%s-%s", utils.ProjectName, req.Scan.BaseOrg, req.Scan.BaseRepo, req.BaseHeadRef)
-		return withTempLocalBranch(git, localBranchName, remoteName, req.BaseHeadRef, func() (bool, error) {
+		return withTempLocalBranch(git, req.SyncBranch, remoteName, req.BaseHeadRef, func() error {
 			// we're now at the HEAD of the branch in the base repository, in
 			// our local copy. Let's proceed cherry-picking all the patches.
-			return removeBranch, syncAllPatches(ctx, git, req)
+			return syncAllPatches(ctx, git, req)
 		})
 	})
 }

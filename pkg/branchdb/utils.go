@@ -27,6 +27,16 @@ func requireBranchIsNotForbidden(branch string) error {
 	return nil
 }
 
+func requireNoLocalChanges(git utils.GitHelper) error {
+	if localChanges, err := git.HasLocalChanges(); err != nil || localChanges {
+		if localChanges {
+			err = multierror.Append(err, fmt.Errorf("local changes must be stashed, committed, or removed"))
+		}
+		return err
+	}
+	return nil
+}
+
 func withTempLocalBranch(git utils.GitHelper, localBranch, remote, remoteBranch string, f func(bool) (bool, error)) error {
 	logrus.Infof("moving into local branch '%s'", localBranch)
 
@@ -138,14 +148,4 @@ func checkoutLocalOrphanBranch(git utils.GitHelper, branch string) (err error) {
 		return
 	}
 	return git.Do("commit", "-m", "new: initial commit")
-}
-
-func requireNoLocalChanges(git utils.GitHelper) error {
-	if localChanges, err := git.HasLocalChanges(); err != nil || localChanges {
-		if localChanges {
-			err = multierror.Append(err, fmt.Errorf("local changes must be stashed, committed, or removed"))
-		}
-		return err
-	}
-	return nil
 }
