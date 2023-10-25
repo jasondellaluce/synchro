@@ -93,9 +93,14 @@ func (g *gitHelper) ListUnmergedFiles() ([]string, error) {
 func (g *gitHelper) HasMergeConflicts() (bool, error) {
 	out, err := g.DoOutput("diff", "--check")
 	if err != nil {
-		return false, err
+		// for "trailing space errors" (on which we're not interested),
+		// the command may succeed but still return an exit status error.
+		// In that case, we skip it
+		if !(strings.HasPrefix(err.Error(), "exit status") && len(out) != 0) {
+			return false, err
+		}
 	}
-	return len(out) != 0, nil
+	return strings.Contains(out, "leftover conflict marker"), nil
 }
 
 func (g *gitHelper) GetCurrentBranch() (string, error) {

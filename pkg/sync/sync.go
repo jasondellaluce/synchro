@@ -54,8 +54,13 @@ func syncAllPatches(ctx context.Context, git utils.GitHelper, req *SyncRequest) 
 }
 
 func attemptCherryPickRecovery(git utils.GitHelper) error {
+	// TODO: it may also happen that we have different kinds of conflicts, we should deal with:
+	// - CONFLICT (content) <- done with rerere
+	// - CONFLICT (rename/delete)
+	// - CONFLICT (modify/delete)
+	// how do we deal with that? maybe we should just add everything?
 	// `git rerere` may potentially have resolved it on our behalf,
-	// so we check if there are actual conflicts remaining
+	// so we check if there are actual conflicts remaining.
 	hasConflicts, err := git.HasMergeConflicts()
 	if err != nil {
 		return err
