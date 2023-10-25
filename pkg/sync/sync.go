@@ -95,11 +95,7 @@ func attemptCherryPickRecovery(git utils.GitHelper) error {
 		return err
 	}
 	if !hasChanges {
-		// there is no chea
-		err := git.Do("reset", "--hard")
-		if err != nil {
-			return err
-		}
+		return git.Do("reset", "--hard")
 	}
 
 	return git.Do("cherry-pick", "--continue")
