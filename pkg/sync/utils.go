@@ -30,11 +30,11 @@ func withTempGitRemote(git utils.GitHelper, remote, url string, f func() error) 
 		return err
 	}
 
-	// prune on exit
-	defer git.Do("fetch", "--prune", remote)
-
 	// remove on exit
 	defer git.Do("remote", "remove", remote)
+
+	// prune on exit
+	defer git.Do("fetch", "--prune", remote)
 
 	// fetch all from remote, tags included
 	err = git.Do("fetch", "--tags", remote)

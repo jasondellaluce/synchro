@@ -17,8 +17,9 @@ func init() {
 }
 
 var rootCmd = &cobra.Command{
-	Use:   utils.ProjectName,
-	Short: utils.ProjectDescription,
+	Use:          utils.ProjectName,
+	Short:        utils.ProjectDescription,
+	SilenceUsage: true,
 	PersistentPreRun: func(cmd *cobra.Command, args []string) {
 		if rootVerbose {
 			logrus.SetLevel(logrus.DebugLevel)

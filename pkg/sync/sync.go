@@ -2,9 +2,7 @@ package sync
 
 import (
 	"context"
-	"errors"
 	"fmt"
-	"strings"
 
 	"github.com/hashicorp/go-multierror"
 	"github.com/jasondellaluce/synchro/pkg/scan"
@@ -42,10 +40,9 @@ func syncAllPatches(ctx context.Context, git utils.GitHelper, req *SyncRequest) 
 	// todo: track progress in tmp state file and eventually resume from there
 	for _, c := range req.ScanRes {
 		logrus.Infof("applying (%s) %s", c.ShortSHA(), c.Title())
-		out, err := git.DoOutput("cherry-pick", c.SHA())
+		err := git.Do("cherry-pick", c.SHA())
 		if err != nil {
-			// we had a cherry-pick failure, append output to the error for more context
-			err = multierror.Append(err, errors.New(strings.TrimSpace(out)))
+			err = fmt.Errorf("merge conflict on commit: %s", c.SHA())
 			recoveryErr := attemptCherryPickRecovery(git)
 			if recoveryErr != nil {
 				logrus.Error("unrecoverable merge conflict occurred, reverting patch")
