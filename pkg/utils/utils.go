@@ -1,10 +1,7 @@
 package utils
 
-const ProjectName = "synchro"
-const ProjectRepo = "https://github.com/jasondellaluce/" + ProjectName
-
-func ReverseSlice[S ~[]E, E any](s S) {
-	for i, j := 0, len(s)-1; i < j; i, j = i+1, j-1 {
-		s[i], s[j] = s[j], s[i]
-	}
-}
+const (
+	ProjectName        = "synchro"
+	ProjectRepo        = "https://github.com/jasondellaluce/" + ProjectName
+	ProjectDescription = "Next-gen tooling for synchronizing private forks of OSS repos"
+)

@@ -16,6 +16,17 @@ var readmeContent = fmt.Sprintf(`
 Generated and automatically managed by [%s](%s)
 `, utils.ProjectName, utils.ProjectRepo)
 
+var forbiddenBranch = map[string]bool{
+	"main": true, "dev": true, "master": true,
+}
+
+func requireBranchIsNotForbidden(branch string) error {
+	if _, ok := forbiddenBranch[branch]; ok {
+		return fmt.Errorf("can't use branch '%s' as a file storage", branch)
+	}
+	return nil
+}
+
 func withTempLocalBranch(git utils.GitHelper, localBranch, remote, remoteBranch string, f func(bool) (bool, error)) error {
 	logrus.Infof("moving into local branch '%s'", localBranch)
 

@@ -15,11 +15,14 @@ func Pull(git utils.GitHelper, remote, branch, filePath string, cleanBranch bool
 	if err := requireNoLocalChanges(git); err != nil {
 		return err
 	}
+	if err := requireBranchIsNotForbidden(branch); err != nil {
+		return err
+	}
 
 	localBranch := fmt.Sprintf("temp-local-%s-%s", utils.ProjectName, branch)
 	return withTempLocalBranch(git, localBranch, remote, branch, func(exists bool) (bool, error) {
 		if !exists {
-			logrus.Warn("cache branch not existing on remote, nothing to pull")
+			logrus.Warnf("branch '%s' not existing on remote, nothing to pull", branch)
 			return cleanBranch, nil
 		}
 
@@ -42,6 +45,9 @@ func Pull(git utils.GitHelper, remote, branch, filePath string, cleanBranch bool
 
 func Push(git utils.GitHelper, remote, branch, filePath string, cleanBranch bool) error {
 	if err := requireNoLocalChanges(git); err != nil {
+		return err
+	}
+	if err := requireBranchIsNotForbidden(branch); err != nil {
 		return err
 	}
 
