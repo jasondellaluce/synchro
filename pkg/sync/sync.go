@@ -9,8 +9,6 @@ import (
 	"github.com/hashicorp/go-multierror"
 	"github.com/jasondellaluce/synchro/pkg/scan"
 	"github.com/jasondellaluce/synchro/pkg/utils"
-	"github.com/ldez/go-git-cmd-wrapper/v2/git"
-	"github.com/ldez/go-git-cmd-wrapper/v2/reset"
 	"github.com/sirupsen/logrus"
 )
 
@@ -21,119 +19,85 @@ type SyncRequest struct {
 	SyncBranch  string
 }
 
-func Sync(ctx context.Context, req *SyncRequest) error {
+func Sync(ctx context.Context, git utils.GitHelper, req *SyncRequest, removeBranch bool) error {
 	// todo: check that origin remote is the actual repo of fork in req request
 	// todo: make "origin" settable
 	logrus.Infof("initiating fork sync for repository %s/%s with base %s/%s", req.Scan.ForkOrg, req.Scan.ForkRepo, req.Scan.BaseOrg, req.Scan.BaseRepo)
 	defer logrus.Infof("finished fork sync for repository %s/%s with base %s/%s", req.Scan.ForkOrg, req.Scan.ForkRepo, req.Scan.BaseOrg, req.Scan.BaseRepo)
 
-	remoteName := fmt.Sprintf("tmp-%s-sync-base-remote", utils.ProjectName)
+	remoteName := fmt.Sprintf("temp-%s-sync-base-remote", utils.ProjectName)
 	remoteURL := fmt.Sprintf("https://github.com/%s/%s", req.Scan.BaseOrg, req.Scan.BaseRepo)
-	logrus.Info("setting up temporary remote for sync")
-	return withTempGitRemote(remoteName, remoteURL, func() error {
-		localBranchName := fmt.Sprintf("tmp-%s-sync-base-remote", utils.ProjectName)
-		remoteBaseBranchName := fmt.Sprintf("%s/%s", remoteName, req.BaseHeadRef)
-		return withTempLocalBranch(localBranchName, remoteBaseBranchName, func() error {
+	return withTempGitRemote(git, remoteName, remoteURL, func() error {
+		localBranchName := fmt.Sprintf("temp-%s-sync-%s-%s-%s", utils.ProjectName, req.Scan.BaseOrg, req.Scan.BaseRepo, req.BaseHeadRef)
+		return withTempLocalBranch(git, localBranchName, remoteName, req.BaseHeadRef, func() (bool, error) {
 			// we're now at the HEAD of the branch in the base repository, in
 			// our local copy. Let's proceed cherry-picking all the patches.
-			return syncAllPatches(ctx, req)
+			return removeBranch, syncAllPatches(ctx, git, req)
 		})
 	})
 }
 
-func syncAllPatches(ctx context.Context, req *SyncRequest) error {
-	// todo: state file and recover
+func syncAllPatches(ctx context.Context, git utils.GitHelper, req *SyncRequest) error {
+	// todo: track progress in tmp state file and eventually resume from there
 	for _, c := range req.ScanRes {
-		logrus.Infof("picking %s %s", c.ShortSHA(), c.Title())
-		logrus.Debugf("git cherry-pick %s", c.SHA())
-		out, err := git.Raw("cherry-pick", simpleArg(c.SHA()))
+		logrus.Infof("applying (%s) %s", c.ShortSHA(), c.Title())
+		out, err := git.DoOutput("cherry-pick", c.SHA())
 		if err != nil {
-			// append output to the error for more context
+			// we had a cherry-pick failure, append output to the error for more context
 			err = multierror.Append(err, errors.New(strings.TrimSpace(out)))
-
-			// we got an error, BUT git rerere may potentially have resolved it on our behalf
-			hasConflicts, errConflicts := hasMergeConflicts()
-			if errConflicts != nil || hasConflicts {
-				return multierror.Append(err, errConflicts, abortCherryPick())
-			}
-
-			// seems like conflicts have been automatically solved, probably
-			// to things like `git rerere`. Let's thank the black magic and proceed.
-			// we first need to make sure all files are checked in and that
-			// we have no unmerged changes
-			logrus.Warn("merge conflict occurred but automatically resolved, proceeding")
-			logrus.Infof("adding unmerged files and continuing")
-			unmerged, errUnmerged := listUnmergedFiles()
-			if errUnmerged != nil {
-				return multierror.Append(err, errUnmerged, abortCherryPick())
-			}
-			for _, f := range unmerged {
-				addErr := doGit(logrus.DebugLevel, func() (string, error) {
-					return git.Add(simpleArg(f))
-				})
-				if addErr != nil {
-					return multierror.Append(err, addErr, abortCherryPick())
-				}
-			}
-
-			// todo: mark the commit someway and print a list of fixup
-			// at the end of the sync process
-
-			hasChanges, errHasChanges := hasLocalChanges()
-			if errHasChanges != nil {
-				return multierror.Append(err, errHasChanges, abortCherryPick())
-			}
-
-			if !hasChanges {
-				abortErr := abortCherryPick()
-				if abortErr != nil {
-					return multierror.Append(err, abortErr)
-				}
-			} else {
-				continueError := doGit(logrus.DebugLevel, func() (string, error) {
-					return git.Raw("cherry-pick", simpleArg("--continue"))
-				})
-				if continueError != nil {
-					return multierror.Append(err, continueError, abortCherryPick())
-				}
+			recoveryErr := attemptCherryPickRecovery(git)
+			if recoveryErr != nil {
+				logrus.Error("unrecoverable merge conflict occurred, reverting patch")
+				return multierror.Append(err, recoveryErr, git.Do("reset", "--hard"))
 			}
 		}
 	}
 	return nil
 }
 
-func hasLocalChanges() (bool, error) {
-	logrus.Debugf("git status --porcelain")
-	out, err := git.Raw("status", simpleArg("--porcelain"))
+func attemptCherryPickRecovery(git utils.GitHelper) error {
+	// `git rerere` may potentially have resolved it on our behalf,
+	// so we check if there are actual conflicts remaining
+	hasConflicts, err := git.HasMergeConflicts()
 	if err != nil {
-		return false, err
+		return err
 	}
-	return len(strings.TrimSpace(out)) != 0, nil
-}
+	if hasConflicts {
+		return multierror.Append(err, fmt.Errorf("unresolved merge conflicts detected"))
+	}
 
-func listUnmergedFiles() ([]string, error) {
-	logrus.Debugf("git diff --name-only --diff-filter=U --relative")
-	out, err := git.Raw("diff", simpleArg("--name-only"), simpleArg("--diff-filter=U"), simpleArg("--relative"))
+	// seems like conflicts have been automatically solved, probably
+	// to things like `git rerere`. Let's thank the black magic and proceed.
+	// we first need to make sure all files are checked in and that
+	// we have no unmerged changes
+	logrus.Warn("merge conflict detected but automatically resolved, proceeding")
+	unmerged, err := git.ListUnmergedFiles()
 	if err != nil {
-		return nil, err
+		return err
 	}
-	lines := strings.Split(strings.TrimSpace(out), "\n")
-	return lines, nil
-}
+	for _, f := range unmerged {
+		err := git.Do("add", f)
+		if err != nil {
+			return err
+		}
+	}
 
-func hasMergeConflicts() (bool, error) {
-	out, err := git.Raw("diff", simpleArg("--check"))
+	// todo: mark the commit someway and print a list of fixup at the end
+	// of the sync process for traceability of automatic resolutions
+
+	// conflict resolution may lead to an empty patch, check if there
+	// are actual changes to be committed
+	hasChanges, err := git.HasLocalChanges()
 	if err != nil {
-		return false, err
+		return err
 	}
-	return len(strings.TrimSpace(out)) != 0, nil
-}
+	if !hasChanges {
+		// there is no chea
+		err := git.Do("reset", "--hard")
+		if err != nil {
+			return err
+		}
+	}
 
-func abortCherryPick() error {
-	// revert cherry-picking to restore git status
-	logrus.Error("unrecoverable merge conflict occurred, stopping")
-	logrus.Info("reverting cherry-pick")
-	logrus.Debug("git reset --hard")
-	_, err := git.Reset(reset.Hard)
-	return err
+	return git.Do("cherry-pick", "--continue")
 }

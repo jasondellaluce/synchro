@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/jasondellaluce/synchro/pkg/rerere"
+	"github.com/jasondellaluce/synchro/pkg/branchdb"
 	"github.com/jasondellaluce/synchro/pkg/utils"
 	"github.com/sirupsen/logrus"
 )
@@ -48,7 +48,14 @@ func main() {
 	// })
 	// exitOnErr(err)
 
-	err := rerere.Push("origin", fmt.Sprintf("%s-rerere-cache", utils.ProjectName))
+	git := utils.NewGitHelper()
+	err := branchdb.Pull(
+		git,
+		"origin",
+		fmt.Sprintf("%s-rerere-cache", utils.ProjectName),
+		"/home/ubuntu/dev/jasondellaluce/test.txt",
+		false,
+	)
 	exitOnErr(err)
 
 }
