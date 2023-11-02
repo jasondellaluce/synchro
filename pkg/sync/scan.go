@@ -1,4 +1,4 @@
-package scan
+package sync
 
 import (
 	"context"
@@ -20,22 +20,18 @@ const IgnoreCommitMarker = "SYNC_IGNORE"
 // scan request, and returns a list of commit info representing the restricted
 // set of commits that are present in the fork exclusively in the form of
 // private patches. Returns a non-nil error in case of failure.
-func Scan(ctx context.Context, client *github.Client, req *ScanRequest) ([]*CommitInfo, error) {
-	logrus.Infof("initiating fork scan for repository %s/%s with base %s/%s", req.ForkOrg, req.ForkRepo, req.BaseOrg, req.BaseRepo)
-	err := req.Error()
-	if err != nil {
-		return nil, err
-	}
-	defer logrus.Infof("finished fork scan for repository %s/%s with base %s/%s", req.ForkOrg, req.ForkRepo, req.BaseOrg, req.BaseRepo)
+func scan(ctx context.Context, client *github.Client, req *Request) ([]*commitInfo, error) {
+	logrus.Infof("initiating fork scan for repository %s/%s with base %s/%s", req.ForkOrg, req.ForkRepo, req.UpstreamOrg, req.UpstreamRepo)
+	defer logrus.Infof("finished fork scan for repository %s/%s with base %s/%s", req.ForkOrg, req.ForkRepo, req.UpstreamOrg, req.UpstreamRepo)
 
 	// iterate through the commits of the fork
-	var result []*CommitInfo
-	err = utils.ConsumeSequence(iterateCommitsByHead(ctx, client, req.ForkOrg, req.ForkRepo, req.ForkHeadRef),
+	var result []*commitInfo
+	err := utils.ConsumeSequence(iterateCommitsByHead(ctx, client, req.ForkOrg, req.ForkRepo, req.ForkHeadRef),
 		func(c *github.RepositoryCommit) error {
 			info, err := scanRepoCommit(ctx, client, req, c)
 			if err == nil {
 				if info != nil {
-					basePRs := info.pullRequestsOfRepo(req.BaseOrg, req.BaseRepo)
+					basePRs := info.pullRequestsOfRepo(req.UpstreamOrg, req.UpstreamRepo)
 					if len(info.PullRequests) == 1 && len(basePRs) == 1 && basePRs[0].MergedAt != nil {
 						logrus.Debugf("commit is only part of a base repo PR, stopping")
 						return utils.ErrSeqBreakout
@@ -53,8 +49,8 @@ func Scan(ctx context.Context, client *github.Client, req *ScanRequest) ([]*Comm
 }
 
 // performs the scan process for the given commit
-func scanRepoCommit(ctx context.Context, client *github.Client, req *ScanRequest, c *github.RepositoryCommit) (*CommitInfo, error) {
-	res := &CommitInfo{Commit: c}
+func scanRepoCommit(ctx context.Context, client *github.Client, req *Request, c *github.RepositoryCommit) (*commitInfo, error) {
+	res := &commitInfo{Commit: c}
 	logrus.Infof("scanning commit %s %s", res.SHA(), res.Title())
 
 	logrus.Debugf("listing pull requests in fork repository %s/%s", req.ForkOrg, req.ForkRepo)
@@ -64,8 +60,8 @@ func scanRepoCommit(ctx context.Context, client *github.Client, req *ScanRequest
 	}
 	res.PullRequests = pulls
 
-	logrus.Debugf("listing pull requests in base repository %s/%s", req.BaseOrg, req.BaseRepo)
-	pulls, err = utils.CollectSequence(iteratePullRequestsByCommitSHA(ctx, client, req.BaseOrg, req.BaseRepo, res.SHA()))
+	logrus.Debugf("listing pull requests in base repository %s/%s", req.UpstreamOrg, req.UpstreamRepo)
+	pulls, err = utils.CollectSequence(iteratePullRequestsByCommitSHA(ctx, client, req.UpstreamOrg, req.UpstreamRepo, res.SHA()))
 	if err != nil {
 		logrus.Debugf("commit probably not found in base repo, purposely ignoring error: %s", err.Error())
 	} else {
@@ -77,8 +73,8 @@ func scanRepoCommit(ctx context.Context, client *github.Client, req *ScanRequest
 		return nil, err
 	}
 	if ref != 0 {
-		logrus.Debugf("checking ref pull request %s/%s#%d", req.BaseOrg, req.BaseRepo, ref)
-		pr, _, err := client.PullRequests.Get(ctx, req.BaseOrg, req.BaseRepo, ref)
+		logrus.Debugf("checking ref pull request %s/%s#%d", req.UpstreamOrg, req.UpstreamRepo, ref)
+		pr, _, err := client.PullRequests.Get(ctx, req.UpstreamOrg, req.UpstreamRepo, ref)
 		if err != nil {
 			return nil, err
 		}
@@ -178,10 +174,10 @@ func searchPullRequestRefs(org, repo, text string) ([]int, error) {
 }
 
 // returns the pull request number relative to the base repo
-func searchForkCommitRef(ctx context.Context, client *github.Client, req *ScanRequest, c *CommitInfo) (int, error) {
+func searchForkCommitRef(ctx context.Context, client *github.Client, req *Request, c *commitInfo) (int, error) {
 	// search in pull request body
 	for _, pr := range c.pullRequestsOfRepo(req.ForkOrg, req.ForkRepo) {
-		refs, err := searchPullRequestRefs(req.BaseOrg, req.BaseRepo, pr.GetBody())
+		refs, err := searchPullRequestRefs(req.UpstreamOrg, req.UpstreamRepo, pr.GetBody())
 		if err != nil {
 			return 0, err
 		}
@@ -196,7 +192,7 @@ func searchForkCommitRef(ctx context.Context, client *github.Client, req *ScanRe
 	}
 
 	// search in commit message
-	refs, err := searchPullRequestRefs(req.BaseOrg, req.BaseRepo, c.Message())
+	refs, err := searchPullRequestRefs(req.UpstreamOrg, req.UpstreamRepo, c.Message())
 	if err != nil {
 		return 0, err
 	}
@@ -215,7 +211,7 @@ func searchForkCommitRef(ctx context.Context, client *github.Client, req *ScanRe
 		return 0, err
 	}
 	for _, comment := range comments {
-		refs, err := searchPullRequestRefs(req.BaseOrg, req.BaseRepo, comment.GetBody())
+		refs, err := searchPullRequestRefs(req.UpstreamOrg, req.UpstreamRepo, comment.GetBody())
 		if err != nil {
 			return 0, err
 		}
@@ -233,7 +229,7 @@ func searchForkCommitRef(ctx context.Context, client *github.Client, req *ScanRe
 }
 
 // returns true if the commit should be ignored for the given scan request
-func checkCommitShouldBeIgnored(ctx context.Context, client *github.Client, req *ScanRequest, c *CommitInfo) (bool, error) {
+func checkCommitShouldBeIgnored(ctx context.Context, client *github.Client, req *Request, c *commitInfo) (bool, error) {
 	comments, err := c.getComments(ctx, client, req.ForkOrg, req.ForkRepo)
 	if err != nil {
 		return false, err

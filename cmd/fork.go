@@ -3,80 +3,38 @@ package cmd
 import (
 	"context"
 	"fmt"
-	"os"
+	"strings"
 
-	"github.com/jasondellaluce/synchro/pkg/scan"
+	"github.com/hashicorp/go-multierror"
 	"github.com/jasondellaluce/synchro/pkg/sync"
 	"github.com/jasondellaluce/synchro/pkg/utils"
 	"github.com/spf13/cobra"
-	"github.com/spf13/pflag"
-	"go.uber.org/multierr"
 )
 
 var (
-	forkHead       string
-	forkOrg        string
-	forkRepo       string
-	forkOrgBase    string
-	forkRepoBase   string
-	forkHeadBase   string
-	forkSyncBranch string
+	forkSyncDryRun   bool
+	forkSyncBranch   string
+	forkHead         string
+	forkRepo         string
+	forkRepoUpstream string
+	forkHeadUpstream string
 )
 
 func init() {
 	rootCmd.AddCommand(forkCmd)
-	forkCmd.AddCommand(forkScanCmd)
 	forkCmd.AddCommand(forkSyncCmd)
 
-	// todo: we may want to split scan and sync commands in the future, in which case
-	// these flags must be splitten and not be persistent in the base-level comamnd
-	forkCmd.PersistentFlags().StringVarP(&forkHead, "fork-head", "c", "", "the head ref of the fork from commits are scanned")
-	forkCmd.PersistentFlags().StringVarP(&forkOrg, "fork-org", "o", "", "the GitHub organization of the fork")
-	forkCmd.PersistentFlags().StringVarP(&forkRepo, "fork-repo", "r", "", "the GitHub repository of the fork")
-	forkCmd.PersistentFlags().StringVarP(&forkOrgBase, "base-org", "O", "", "the GitHub organization of the forked repository")
-	forkCmd.PersistentFlags().StringVarP(&forkRepoBase, "base-repo", "R", "", "the forked GitHub repository")
-
-	forkSyncCmd.Flags().StringVarP(&forkHeadBase, "base-head", "C", "", "the head ref of the forked repositoy on which appending the fork's scanned commits")
-	forkSyncCmd.Flags().StringVarP(&forkSyncBranch, "sync-branch", "b", "", "the fork's branch name used for the sync")
+	forkSyncCmd.Flags().BoolVar(&forkSyncDryRun, "dryrun", false, "preview the sync changes")
+	forkSyncCmd.Flags().StringVarP(&forkSyncBranch, "branch", "b", "", "the fork's branch name used for the sync")
+	forkSyncCmd.Flags().StringVarP(&forkHead, "head", "c", "", "the head ref of the fork from which commits are scanned")
+	forkSyncCmd.Flags().StringVarP(&forkRepo, "repo", "r", "", "the GitHub repository of the fork in the form <org>/<repo>")
+	forkSyncCmd.Flags().StringVarP(&forkHeadUpstream, "upstream-head", "C", "", "the head ref of the forked repositoy on which appending the fork's scanned commits")
+	forkSyncCmd.Flags().StringVarP(&forkRepoUpstream, "upstream-repo", "R", "", "the forked GitHub repository in the form <org>/<repo>")
 }
 
 var forkCmd = &cobra.Command{
 	Use:   "fork",
-	Short: "Manage a private fork of an Base repository",
-}
-
-var forkScanCmd = &cobra.Command{
-	Use:   "scan",
-	Short: "Scans a fork's ref and the OSS and finds the restricted set of commits/patches that are present only in the fork",
-	RunE: func(cmd *cobra.Command, args []string) error {
-		var err error
-		cmd.Flags().VisitAll(func(f *pflag.Flag) {
-			if len(f.Value.String()) == 0 {
-				multierr.Append(err, fmt.Errorf("must define arg '%s'", f.Name))
-			}
-		})
-		if err != nil {
-			return err
-		}
-
-		client := getGithubClient()
-		scanRequest := scan.ScanRequest{
-			BaseOrg:     forkOrgBase,
-			BaseRepo:    forkRepoBase,
-			ForkOrg:     forkOrg,
-			ForkRepo:    forkRepo,
-			ForkHeadRef: forkHead,
-		}
-		scan, err := scan.Scan(context.Background(), client, &scanRequest)
-		if err != nil {
-			return err
-		}
-		for _, c := range scan {
-			// todo: store scan results in a state file
-			fmt.Fprintf(os.Stdout, "git cherry-pick %s # %s", c.SHA(), c.Title())
-		}
-		return nil
-	},
+	Short: "Manage a private fork of an Upstream repository",
 }
 
 var forkSyncCmd = &cobra.Command{
@@ -84,39 +42,58 @@ var forkSyncCmd = &cobra.Command{
 	Short: "Syncs the fork to a ref from the forked repository by appending all the commits resulting from a fork scan",
 	RunE: func(cmd *cobra.Command, args []string) error {
 		var err error
-		cmd.Flags().VisitAll(func(f *pflag.Flag) {
-			if len(f.Value.String()) == 0 {
-				multierr.Append(err, fmt.Errorf("must define arg '%s'", f.Name))
-			}
-		})
+		if len(forkRepoUpstream) == 0 {
+			err = multierror.Append(fmt.Errorf("must define upstream repository in scan request"), err)
+		}
+		if len(forkRepo) == 0 {
+			err = multierror.Append(fmt.Errorf("must define fork's repository in scan request"), err)
+		}
+		if len(forkHeadUpstream) == 0 {
+			err = multierror.Append(fmt.Errorf("must define upstream head ref in scan request"), err)
+		}
+		if len(forkHead) == 0 {
+			err = multierror.Append(fmt.Errorf("must define fork's head ref in scan request"), err)
+		}
+		if len(forkSyncBranch) == 0 {
+			err = multierror.Append(fmt.Errorf("must define name of the sync branch in fork"), err)
+		}
 		if err != nil {
 			return err
 		}
 
-		// todo: make sync not do the implicit scan -- separate the two steps
-		// and write a state file in the .git directory
-		ctx := context.Background()
-		client := getGithubClient()
-		scanRequest := scan.ScanRequest{
-			BaseOrg:     forkOrgBase,
-			BaseRepo:    forkRepoBase,
-			ForkOrg:     forkOrg,
-			ForkRepo:    forkRepo,
-			ForkHeadRef: forkHead,
-		}
-		scan, err := scan.Scan(ctx, client, &scanRequest)
+		forkOrg, forkRepoName, err := getOrgRepo(forkRepo)
 		if err != nil {
 			return err
 		}
+		upstreamOrg, upstreamRepoName, err := getOrgRepo(forkRepoUpstream)
+		if err != nil {
+			return err
+		}
+
+		ctx := context.Background()
+		client := getGithubClient()
 		return sync.Sync(
 			ctx,
 			utils.NewGitHelper(),
-			&sync.SyncRequest{
-				Scan:        scanRequest,
-				ScanRes:     scan,
-				BaseHeadRef: forkHeadBase,
-				SyncBranch:  forkSyncBranch,
+			client,
+			&sync.Request{
+				DryRun:          forkSyncDryRun,
+				OutBranch:       forkSyncBranch,
+				UpstreamOrg:     upstreamOrg,
+				UpstreamRepo:    upstreamRepoName,
+				ForkOrg:         forkOrg,
+				ForkRepo:        forkRepoName,
+				ForkHeadRef:     forkHead,
+				UpstreamHeadRef: forkHeadUpstream,
 			},
 		)
 	},
+}
+
+func getOrgRepo(s string) (string, string, error) {
+	tokens := strings.Split(s, "/")
+	if len(tokens) != 2 {
+		return "", "", fmt.Errorf("repository must be in the form <org>/<repo>: %s", s)
+	}
+	return tokens[0], tokens[1], nil
 }

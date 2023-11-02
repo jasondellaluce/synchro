@@ -3,42 +3,48 @@ package sync
 import (
 	"context"
 	"fmt"
+	"os"
 
+	"github.com/google/go-github/v56/github"
 	"github.com/hashicorp/go-multierror"
-	"github.com/jasondellaluce/synchro/pkg/scan"
 	"github.com/jasondellaluce/synchro/pkg/utils"
 	"github.com/sirupsen/logrus"
 )
 
-type SyncRequest struct {
-	Scan        scan.ScanRequest
-	ScanRes     []*scan.CommitInfo
-	BaseHeadRef string
-	SyncBranch  string
-}
-
-func Sync(ctx context.Context, git utils.GitHelper, req *SyncRequest) error {
+func Sync(ctx context.Context, git utils.GitHelper, client *github.Client, req *Request) error {
 	if err := requireNoLocalChanges(git); err != nil {
 		return err
 	}
 
+	scanRes, err := scan(ctx, client, req)
+	if err != nil {
+		return err
+	}
+	if req.DryRun {
+		logrus.Info("skipping performing sync due to dry run request")
+		for _, c := range scanRes {
+			fmt.Fprintf(os.Stdout, "git cherry-pick %s # %s\n", c.SHA(), c.Title())
+		}
+		return nil
+	}
+
 	// todo: check that origin remote is the actual repo of fork in req request
 
-	remoteName := fmt.Sprintf("temp-%s-sync-base-remote", utils.ProjectName)
-	remoteURL := fmt.Sprintf("https://github.com/%s/%s", req.Scan.BaseOrg, req.Scan.BaseRepo)
-	logrus.Infof("initiating fork sync for repository %s/%s with base %s/%s", req.Scan.ForkOrg, req.Scan.ForkRepo, req.Scan.BaseOrg, req.Scan.BaseRepo)
+	remoteName := fmt.Sprintf("temp-%s-sync-upstream", utils.ProjectName)
+	remoteURL := fmt.Sprintf("https://github.com/%s/%s", req.UpstreamOrg, req.UpstreamRepo)
+	logrus.Infof("initiating fork sync for repository %s/%s with upstream %s/%s", req.ForkOrg, req.ForkRepo, req.UpstreamOrg, req.UpstreamRepo)
 	return withTempGitRemote(git, remoteName, remoteURL, func() error {
-		return withTempLocalBranch(git, req.SyncBranch, remoteName, req.BaseHeadRef, func() error {
-			// we're now at the HEAD of the branch in the base repository, in
+		return withTempLocalBranch(git, req.OutBranch, remoteName, req.UpstreamHeadRef, func() error {
+			// we're now at the HEAD of the branch in the upstream repository, in
 			// our local copy. Let's proceed cherry-picking all the patches.
-			return syncAllPatches(ctx, git, req)
+			return syncAllPatches(ctx, git, req, scanRes)
 		})
 	})
 }
 
-func syncAllPatches(ctx context.Context, git utils.GitHelper, req *SyncRequest) error {
+func syncAllPatches(ctx context.Context, git utils.GitHelper, req *Request, scanRes []*commitInfo) error {
 	// todo: track progress in tmp state file and eventually resume from there
-	for _, c := range req.ScanRes {
+	for _, c := range scanRes {
 		logrus.Infof("applying (%s) %s", c.ShortSHA(), c.Title())
 		err := git.Do("cherry-pick", c.SHA())
 		if err != nil {

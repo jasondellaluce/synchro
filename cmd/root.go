@@ -13,7 +13,7 @@ var (
 
 func init() {
 	rootCmd.PersistentFlags().BoolVar(&rootVerbose, "verbose", false, "if true, turns the logger into more verbose")
-	rootCmd.PersistentFlags().BoolVar(&rootPreserveTempBranches, "--keep-branches", false, "if true, any temporary local branches will not be removed after the execution of a command")
+	rootCmd.PersistentFlags().BoolVar(&rootPreserveTempBranches, "keep-branches", false, "if true, any temporary local branches will not be removed after the execution of a command")
 }
 
 var rootCmd = &cobra.Command{
