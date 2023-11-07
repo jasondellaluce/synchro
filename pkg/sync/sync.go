@@ -54,6 +54,10 @@ func syncAllPatches(ctx context.Context, git utils.GitHelper, req *Request, scan
 				logrus.Error("unrecoverable merge conflict occurred, reverting patch")
 				return multierror.Append(err, recoveryErr, git.Do("reset", "--hard"))
 			}
+
+			// TODO: add a note or body comment describing what commit has been
+			// ported and how the automatic merge happened
+
 			continueErr := git.Do("cherry-pick", "--allow-empty", "--continue")
 			if continueErr != nil {
 				logrus.Error("failed continuing cherry-pick, reverting patch")

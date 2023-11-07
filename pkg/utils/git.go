@@ -31,7 +31,6 @@ type GitHelper interface {
 	DoOutput(commands ...string) (string, error)
 	HasLocalChanges(filters ...func(string) bool) (bool, error)
 	ListUnmergedFiles() ([]string, error)
-	HasMergeConflicts() (bool, error)
 	GetCurrentBranch() (string, error)
 	GetRemoteDefaultBranch(remote string) (string, error)
 	BranchExistsInRemote(remote, branch string) (bool, error)
@@ -88,19 +87,6 @@ func (g *gitHelper) ListUnmergedFiles() ([]string, error) {
 		return nil, err
 	}
 	return strings.Split(out, "\n"), nil
-}
-
-func (g *gitHelper) HasMergeConflicts() (bool, error) {
-	out, err := g.DoOutput("diff", "--check")
-	if err != nil {
-		// for "trailing space errors" (on which we're not interested),
-		// the command may succeed but still return an exit status error.
-		// In that case, we skip it
-		if !(strings.HasPrefix(err.Error(), "exit status") && len(out) != 0) {
-			return false, err
-		}
-	}
-	return strings.Contains(out, "leftover conflict marker"), nil
 }
 
 func (g *gitHelper) GetCurrentBranch() (string, error) {

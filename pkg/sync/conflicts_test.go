@@ -33,7 +33,7 @@ CONFLICT (rename/delete): c.txt renamed to c2.txt in 4b258cd86 (test), but delet
 		expected := []*deleteRenameConflictInfo{
 			{
 				UpstreamDeleted: "c.txt",
-				ForkRenemed:     "c2.txt",
+				ForkRenamed:     "c2.txt",
 			},
 		}
 		conflicts, err := getDeleteRenameConflictInfos(conflictSample2)
@@ -46,7 +46,7 @@ CONFLICT (rename/delete): c.txt renamed to c2.txt in 4b258cd86 (test), but delet
 			{
 				UpstreamOriginal: "a.txt",
 				UpstreamRenamed:  "a2.txt",
-				ForkRenemed:      "a3.txt",
+				ForkRenamed:      "a3.txt",
 			},
 		}
 		conflicts, err := getRenameRenameConflictInfos(conflictSample2)
