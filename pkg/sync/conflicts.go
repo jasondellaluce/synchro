@@ -1,6 +1,7 @@
 package sync
 
 import (
+	"errors"
 	"fmt"
 	"regexp"
 	"strings"
@@ -93,7 +94,13 @@ func attemptMergeConflictRecovery(git utils.GitHelper, out string) error {
 	}
 	for _, c := range rr {
 		logrus.Warnf("merge conflict auto-recovery: rename/rename detected for file %s, keeping downstream name %s", c.UpstreamOriginal, c.ForkRenamed)
-		err = multierr.Append(git.Do("rm", "-f", c.ForkRenamed), git.Do("mv", c.UpstreamRenamed, c.ForkRenamed))
+		err = git.Do("rm", "-f", c.ForkRenamed)
+		if err != nil {
+			// note: not return on error because files can potentially not be there
+			// and we would catch inconsistencies anyways when staging files later
+			logrus.Error(err.Error())
+		}
+		err = git.Do("mv", c.UpstreamRenamed, c.ForkRenamed)
 		if err != nil {
 			return fmt.Errorf("could not recover from rename/rename conflict: %s", err.Error())
 		}
@@ -109,7 +116,9 @@ func attemptMergeConflictRecovery(git utils.GitHelper, out string) error {
 		logrus.Warnf("merge conflict auto-recovery: rename/delete detected for file %s, deleting it", c.UpstreamOriginal)
 		err = multierr.Append(git.Do("rm", "-f", c.UpstreamOriginal), git.Do("rm", "-f", c.UpstreamRenamed))
 		if err != nil {
-			return fmt.Errorf("could not recover from rename/delete conflict: %s", err.Error())
+			// note: not return on error because files can potentially not be there
+			// and we would catch inconsistencies anyways when staging files later
+			logrus.Error(err.Error())
 		}
 	}
 
@@ -126,7 +135,9 @@ func attemptMergeConflictRecovery(git utils.GitHelper, out string) error {
 		logrus.Warnf("merge conflict auto-recovery: delete/modify detected for file %s, deleting it", c.UpstreamDeleted)
 		err = git.Do("rm", "-f", c.UpstreamDeleted)
 		if err != nil {
-			return fmt.Errorf("could not recover from delete/modify conflict: %s", err.Error())
+			// note: not return on error because files can potentially not be there
+			// and we would catch inconsistencies anyways when staging files later
+			logrus.Error(err.Error())
 		}
 	}
 
@@ -143,37 +154,49 @@ func attemptMergeConflictRecovery(git utils.GitHelper, out string) error {
 		logrus.Warnf("merge conflict auto-recovery: delete/rename detected for file %s, deleting it", c.UpstreamDeleted)
 		err = multierr.Append(git.Do("rm", "-f", c.UpstreamDeleted), git.Do("rm", "-f", c.ForkRenamed))
 		if err != nil {
-			return fmt.Errorf("could not recover from delete/rename conflict: %s", err.Error())
+			// note: not return on error because files can potentially not be there
+			// and we would catch inconsistencies anyways when staging files later
+			logrus.Error(err.Error())
 		}
 	}
 
+	// check if the remaining merge conflicts are all content ones
+	// or if there are some unknown from which we can't possibly recover
 	numNonContentConfilicts := len(md) + len(rr) + len(rd) + len(dm) + len(dr)
-	if numConflicts > numNonContentConfilicts {
-		// check if the remaining merge conflicts are all content ones
-		// or if there are some unknown from which we can't possibly recover
-		unknownConflicts := numConflicts - (numNonContentConfilicts + numContentConflicts)
-		if unknownConflicts > 0 {
-			return fmt.Errorf("%d unknown conflicts encountered, can't recover: %s", unknownConflicts, out)
-		}
+	unknownConflicts := numConflicts - (numNonContentConfilicts + numContentConflicts)
+	if numNonContentConfilicts > numConflicts || unknownConflicts > 0 {
+		return fmt.Errorf("unknown conflicts encountered (%d content, %d non-content, %d total), can't recover: %s", numContentConflicts, numNonContentConfilicts, numConflicts, out)
+	}
 
-		// at this point we have only content conflicts remaining, check if
-		// they have all been solved already through `git rerere`, otherwise
-		// return an error and provide guidance on how to solve the conflic
-		// through manual intervention
-		unmerged, err := git.ListUnmergedFiles()
-		if err != nil {
-			return err
-		}
-		if len(unmerged) > 0 {
+	// for content merge conflicts, check if the conflict markers
+	// have all been solved already through `git rerere`, otherwise
+	// return an error and provide guidance on how to solve the conflict
+	// through manual intervention
+	if numContentConflicts > 0 {
+		out, err := git.DoOutput("diff", "--check")
+		if err != nil || len(out) > 0 {
+			if err == nil {
+				err = errors.New(out)
+			}
 			// TODO: print out action items
-			return fmt.Errorf("could not recover from content/content conflict, must solve manually with git rerere")
+			return fmt.Errorf("could not recover from content/content conflict, must solve manually with git rerere: %s", err.Error())
 		}
 
 		logrus.Warn("merge content conflict detected but automatically resolved, proceeding")
-		err = git.Do("add", "-A")
-		if err != nil {
-			return fmt.Errorf("could not recover from content conflict: %s", err.Error())
-		}
+	}
+
+	// check that we didn't miss any unmerged file and stage all changes. At this
+	// point only content conflicts should be unmerged.
+	unmerged, err := git.ListUnmergedFiles()
+	if err != nil {
+		return err
+	}
+	if len(unmerged) != numContentConflicts {
+		return fmt.Errorf("found %d unmerged files but expected %d: %s", len(unmerged), numContentConflicts, strings.Join(unmerged, ","))
+	}
+	err = git.Do("add", "-A")
+	if err != nil {
+		return fmt.Errorf("could not recover from content conflict: %s", err.Error())
 	}
 
 	return nil

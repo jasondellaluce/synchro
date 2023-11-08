@@ -1,11 +1,13 @@
 package utils
 
 import (
+	"errors"
 	"fmt"
 	"os/exec"
 	"strings"
 
 	"github.com/sirupsen/logrus"
+	"go.uber.org/multierr"
 )
 
 type GitHelper interface {
@@ -84,9 +86,18 @@ func (g *gitHelper) HasLocalChanges(filters ...func(string) bool) (bool, error) 
 func (g *gitHelper) ListUnmergedFiles() ([]string, error) {
 	out, err := g.DoOutput("diff", "--name-only", "--diff-filter=U", "--relative")
 	if err != nil {
+		if len(out) > 0 {
+			err = multierr.Append(err, errors.New(out))
+		}
 		return nil, err
 	}
-	return strings.Split(out, "\n"), nil
+	var res []string
+	for _, f := range strings.Split(out, "\n") {
+		if len(f) > 0 {
+			res = append(res, f)
+		}
+	}
+	return res, nil
 }
 
 func (g *gitHelper) GetCurrentBranch() (string, error) {
