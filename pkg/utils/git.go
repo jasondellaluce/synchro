@@ -37,17 +37,26 @@ type GitHelper interface {
 	GetRemoteDefaultBranch(remote string) (string, error)
 	BranchExistsInRemote(remote, branch string) (bool, error)
 	GetRepoRootDir() (string, error)
+	GetRemotes() (map[string]string, error)
+}
+
+type cmdExecutor interface {
+	exec(cmd string, args ...string) (string, error)
+}
+
+type execCmdExecutor struct{}
+
+func (g *execCmdExecutor) exec(cmd string, args ...string) (string, error) {
+	outBytes, err := exec.Command(cmd, args...).CombinedOutput()
+	return strings.TrimSpace(string(outBytes)), err
 }
 
 func NewGitHelper() GitHelper {
-	return &gitHelper{}
+	return &gitHelper{e: &execCmdExecutor{}}
 }
 
-type gitHelper struct{}
-
-func (g *gitHelper) Do(commands ...string) error {
-	_, err := g.DoOutput(commands...)
-	return err
+type gitHelper struct {
+	e cmdExecutor
 }
 
 func (g *gitHelper) DoOutput(commands ...string) (string, error) {
@@ -55,10 +64,14 @@ func (g *gitHelper) DoOutput(commands ...string) (string, error) {
 		return "", fmt.Errorf("attempted executing empty git command")
 	}
 	logrus.Debug("git " + strings.Join(commands, " "))
-	outBytes, err := exec.Command("git", commands...).CombinedOutput()
-	out := strings.TrimSpace(string(outBytes))
+	out, err := g.e.exec("git", commands...)
 	logrus.Debug(out)
-	return strings.TrimSpace(string(out)), err
+	return out, err
+}
+
+func (g *gitHelper) Do(commands ...string) error {
+	_, err := g.DoOutput(commands...)
+	return err
 }
 
 func (g *gitHelper) HasLocalChanges(filters ...func(string) bool) (bool, error) {
@@ -138,4 +151,23 @@ func (g *gitHelper) GetRepoRootDir() (string, error) {
 		return "", err
 	}
 	return out, nil
+}
+
+func (g *gitHelper) GetRemotes() (map[string]string, error) {
+	out, err := g.DoOutput("remote", "-v")
+	if err != nil {
+		return nil, err
+	}
+	res := make(map[string]string)
+	for _, l := range strings.Split(out, "\n") {
+		if len(l) == 0 {
+			continue
+		}
+		tokens := strings.Fields(l)
+		if len(tokens) < 2 {
+			return nil, fmt.Errorf("can't parse result of `git remote -v` in line: %s", l)
+		}
+		res[tokens[0]] = tokens[1]
+	}
+	return res, nil
 }
