@@ -3,6 +3,7 @@ package sync
 import (
 	"errors"
 	"fmt"
+	"os"
 	"regexp"
 	"strings"
 
@@ -64,8 +65,27 @@ type modifyDeleteConflictInfo struct {
 // and the goal is to identify all the merge conflicts and attempt resolving
 // them manually. A non-nil error is returned in case the recover attempt fails.
 func attemptMergeConflictRecovery(git utils.GitHelper, out string) error {
-	// TODO: make sure this is run at the root of thegit repo
+	// note: merge conflicts will give relative paths of conflicting files,
+	// so if automatic recovery is needed we have to make sure that we
+	// are in the repo's root diretory
+	logrus.Debug("making sure app is executing in repo root directory")
+	repoRootDir, err := git.GetRepoRootDir()
+	if err != nil {
+		return err
+	}
+	curDir, err := os.Getwd()
+	if err != nil {
+		return err
+	}
+	if repoRootDir != curDir {
+		logrus.Infof("changing working directory to repo's root: %s", repoRootDir)
+		err := os.Chdir(repoRootDir)
+		if err != nil {
+			return err
+		}
+	}
 
+	// count number of conflicts and use it later
 	numConflicts := countMergeConflicts(out)
 
 	// content conflicts will be handled through git rerere. If not, we'll

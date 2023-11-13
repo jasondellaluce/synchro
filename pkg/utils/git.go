@@ -36,6 +36,7 @@ type GitHelper interface {
 	GetCurrentBranch() (string, error)
 	GetRemoteDefaultBranch(remote string) (string, error)
 	BranchExistsInRemote(remote, branch string) (bool, error)
+	GetRepoRootDir() (string, error)
 }
 
 func NewGitHelper() GitHelper {
@@ -129,4 +130,12 @@ func (g *gitHelper) BranchExistsInRemote(remote, branch string) (bool, error) {
 		return false, err
 	}
 	return len(out) != 0, nil
+}
+
+func (g *gitHelper) GetRepoRootDir() (string, error) {
+	out, err := g.DoOutput("rev-parse", "--show-toplevel")
+	if err != nil {
+		return "", err
+	}
+	return out, nil
 }
