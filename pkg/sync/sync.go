@@ -49,7 +49,7 @@ func Sync(ctx context.Context, git utils.GitHelper, client *github.Client, req *
 	}
 	if originRemote, ok := remotes["origin"]; !ok {
 		return fmt.Errorf("can't find `origin` remote in current repo")
-	} else if !strings.HasSuffix(originRemote, fmt.Sprintf("%s/%s.git", req.ForkOrg, req.ForkRepo)) {
+	} else if !strings.Contains(originRemote, fmt.Sprintf("%s/%s", req.ForkOrg, req.ForkRepo)) {
 		return fmt.Errorf("current repo `origin` remote does not match the fork's one: %s", originRemote)
 	}
 
