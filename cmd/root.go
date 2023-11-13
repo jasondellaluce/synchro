@@ -1,19 +1,19 @@
 package cmd
 
 import (
+	"os"
+
 	"github.com/jasondellaluce/synchro/pkg/utils"
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 )
 
 var (
-	rootVerbose              bool
-	rootPreserveTempBranches bool
+	rootVerbose bool
 )
 
 func init() {
 	rootCmd.PersistentFlags().BoolVar(&rootVerbose, "verbose", false, "if true, turns the logger into more verbose")
-	rootCmd.PersistentFlags().BoolVar(&rootPreserveTempBranches, "keep-branches", false, "if true, any temporary local branches will not be removed after the execution of a command")
 }
 
 var rootCmd = &cobra.Command{
@@ -21,6 +21,7 @@ var rootCmd = &cobra.Command{
 	Short:        utils.ProjectDescription,
 	SilenceUsage: true,
 	PersistentPreRun: func(cmd *cobra.Command, args []string) {
+		logrus.SetOutput(os.Stderr)
 		if rootVerbose {
 			logrus.SetLevel(logrus.DebugLevel)
 		} else {

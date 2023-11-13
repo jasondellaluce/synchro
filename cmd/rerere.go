@@ -13,8 +13,9 @@ const (
 )
 
 var (
-	rerereRemote        string
-	rerereStorageBranch string
+	rerereRemote               string
+	rerereStorageBranch        string
+	rererePreserveTempBranches bool
 )
 
 func init() {
@@ -25,6 +26,7 @@ func init() {
 	defaultBranch := fmt.Sprintf("%s-rerere-cache", utils.ProjectName)
 	rerereCmd.PersistentFlags().StringVarP(&rerereRemote, "remote", "r", "origin", "the remote name of the storage branch")
 	rerereCmd.PersistentFlags().StringVarP(&rerereStorageBranch, "branch", "b", defaultBranch, "the name of the storage to be used as storage for the rerere cache")
+	rerereCmd.PersistentFlags().BoolVar(&rererePreserveTempBranches, "keep-branches", false, "if true, any temporary local branches will not be removed after the execution of a command")
 }
 
 var rerereCmd = &cobra.Command{
@@ -41,7 +43,7 @@ var rererePullCmd = &cobra.Command{
 			rerereRemote,
 			rerereStorageBranch,
 			rerereCacheFilePath,
-			!rootPreserveTempBranches,
+			!rererePreserveTempBranches,
 		)
 	},
 }
@@ -55,7 +57,7 @@ var rererePushCmd = &cobra.Command{
 			rerereRemote,
 			rerereStorageBranch,
 			rerereCacheFilePath,
-			!rootPreserveTempBranches,
+			!rererePreserveTempBranches,
 		)
 	},
 }

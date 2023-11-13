@@ -21,23 +21,16 @@ var (
 )
 
 func init() {
-	rootCmd.AddCommand(forkCmd)
-	forkCmd.AddCommand(forkSyncCmd)
-
-	forkSyncCmd.Flags().BoolVar(&forkSyncDryRun, "dryrun", false, "preview the sync changes")
-	forkSyncCmd.Flags().StringVarP(&forkSyncBranch, "branch", "b", "", "the fork's branch name used for the sync")
-	forkSyncCmd.Flags().StringVarP(&forkHead, "head", "c", "", "the head ref of the fork from which commits are scanned")
-	forkSyncCmd.Flags().StringVarP(&forkRepo, "repo", "r", "", "the GitHub repository of the fork in the form <org>/<repo>")
-	forkSyncCmd.Flags().StringVarP(&forkHeadUpstream, "upstream-head", "C", "", "the head ref of the forked repositoy on which appending the fork's scanned commits")
-	forkSyncCmd.Flags().StringVarP(&forkRepoUpstream, "upstream-repo", "R", "", "the forked GitHub repository in the form <org>/<repo>")
+	rootCmd.AddCommand(syncCmd)
+	syncCmd.Flags().BoolVar(&forkSyncDryRun, "dryrun", false, "preview the sync changes")
+	syncCmd.Flags().StringVarP(&forkSyncBranch, "branch", "b", "", "the fork's branch name used for the sync")
+	syncCmd.Flags().StringVarP(&forkHead, "head", "c", "", "the head ref of the fork from which commits are scanned")
+	syncCmd.Flags().StringVarP(&forkRepo, "repo", "r", "", "the GitHub repository of the fork in the form <org>/<repo>")
+	syncCmd.Flags().StringVarP(&forkHeadUpstream, "upstream-head", "C", "", "the head ref of the forked repositoy on which appending the fork's scanned commits")
+	syncCmd.Flags().StringVarP(&forkRepoUpstream, "upstream-repo", "R", "", "the forked GitHub repository in the form <org>/<repo>")
 }
 
-var forkCmd = &cobra.Command{
-	Use:   "fork",
-	Short: "Manage a private fork of an Upstream repository",
-}
-
-var forkSyncCmd = &cobra.Command{
+var syncCmd = &cobra.Command{
 	Use:   "sync",
 	Short: "Syncs the fork to a ref from the forked repository by appending all the commits resulting from a fork scan",
 	RunE: func(cmd *cobra.Command, args []string) error {
