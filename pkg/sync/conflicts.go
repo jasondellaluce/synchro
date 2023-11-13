@@ -64,7 +64,7 @@ type modifyDeleteConflictInfo struct {
 // this is invoked when a `git cherry-pick` fails with a non-zero status code,
 // and the goal is to identify all the merge conflicts and attempt resolving
 // them manually. A non-nil error is returned in case the recover attempt fails.
-func attemptMergeConflictRecovery(git utils.GitHelper, out string) error {
+func attemptMergeConflictRecovery(git utils.GitHelper, out string, req *Request, commit *commitInfo) error {
 	// note: merge conflicts will give relative paths of conflicting files,
 	// so if automatic recovery is needed we have to make sure that we
 	// are in the repo's root diretory
@@ -151,7 +151,6 @@ func attemptMergeConflictRecovery(git utils.GitHelper, out string) error {
 		return fmt.Errorf("could not check for delete/modify conflicts: %s", err.Error())
 	}
 	for _, c := range dm {
-		// TODO: print out action items in case of problems
 		logrus.Warnf("merge conflict auto-recovery: delete/modify detected for file %s, deleting it", c.UpstreamDeleted)
 		err = git.Do("rm", "-f", c.UpstreamDeleted)
 		if err != nil {
@@ -170,7 +169,6 @@ func attemptMergeConflictRecovery(git utils.GitHelper, out string) error {
 		return fmt.Errorf("could not check for delete/rename conflicts: %s", err.Error())
 	}
 	for _, c := range dr {
-		// TODO: print out action items in case of problems
 		logrus.Warnf("merge conflict auto-recovery: delete/rename detected for file %s, deleting it", c.UpstreamDeleted)
 		err = multierr.Append(git.Do("rm", "-f", c.UpstreamDeleted), git.Do("rm", "-f", c.ForkRenamed))
 		if err != nil {
@@ -195,11 +193,23 @@ func attemptMergeConflictRecovery(git utils.GitHelper, out string) error {
 	if numContentConflicts > 0 {
 		out, err := git.DoOutput("diff", "--check")
 		if err != nil || len(out) > 0 {
-			if err == nil {
+			if len(out) > 0 {
+				// use the git command's output as error, and output a suggestion
+				// to the user about the expected action items for solving
+				// the content conflict
 				err = errors.New(out)
+				suggestion := formatConflictSuggestion(contentConflictSuggestion, &conflictSuggestionInfo{
+					UpstreamOrg:       req.UpstreamOrg,
+					UpstreamRepo:      req.UpstreamRepo,
+					UpstreamRef:       req.UpstreamHeadRef,
+					ForkOrg:           req.ForkOrg,
+					ForkRepo:          req.ForkRepo,
+					ConflictCommitSHA: commit.SHA(),
+					BranchName:        req.OutBranch,
+				})
+				fmt.Fprintf(os.Stdout, "%s\n", suggestion)
 			}
-			// TODO: print out action items
-			return fmt.Errorf("could not recover from content/content conflict, must solve manually with git rerere: %s", err.Error())
+			return multierr.Append(errors.New("could not recover from content/content conflict, must solve manually"), err)
 		}
 
 		logrus.Warn("merge content conflict detected but automatically resolved, proceeding")

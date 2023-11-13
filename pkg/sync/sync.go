@@ -12,6 +12,11 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
+// SyncCommitBodyHeader is a keyword that can be used to prefix a line in the
+// body message of a commit for specifying metadata about the sync process
+// relative to that commit
+var SyncCommitBodyHeader = strings.ToUpper(utils.ProjectName)
+
 func Sync(ctx context.Context, git utils.GitHelper, client *github.Client, req *Request) error {
 	if err := requireNoLocalChanges(git); err != nil {
 		return err
@@ -65,24 +70,52 @@ func applyAllPatches(ctx context.Context, git utils.GitHelper, req *Request, sca
 	// todo: track progress in tmp state file and eventually resume from there
 	for _, c := range scanRes {
 		logrus.Infof("applying (%s) %s", c.ShortSHA(), c.Title())
+
+		recovered := false
 		out, err := git.DoOutput("cherry-pick", "--allow-empty", c.SHA())
 		if err != nil {
 			err = fmt.Errorf("merge conflict on commit: %s", c.SHA())
-			recoveryErr := attemptMergeConflictRecovery(git, out)
+			recoveryErr := attemptMergeConflictRecovery(git, out, req, c)
 			if recoveryErr != nil {
 				logrus.Error("unrecoverable merge conflict occurred, reverting patch")
 				return multierror.Append(err, recoveryErr, git.Do("reset", "--hard"))
 			}
-
-			// TODO: add a note or body comment describing what commit has been
-			// ported and how the automatic merge happened
-
+			recovered = true
 			continueErr := git.Do("cherry-pick", "--allow-empty", "--continue")
 			if continueErr != nil {
 				logrus.Error("failed continuing cherry-pick, reverting patch")
 				return multierror.Append(err, continueErr, git.Do("reset", "--hard"))
 			}
 		}
+
+		// mark the commit with metadata about the automated sync
+		var commitMsg strings.Builder
+		prevMsg, err := git.DoOutput("log", "--format=%B", "-n1")
+		if err != nil {
+			logrus.Error("failed obtaining latest commit message")
+			return err
+		}
+		commitURL := fmt.Sprintf("https://github.com/%s/%s/commit/%s)", req.ForkOrg, req.ForkRepo, c.SHA())
+		commitMsg.WriteString(commitMessageWithNoSyncMarkers(prevMsg) + "\n\n")
+		commitMsg.WriteString(fmt.Sprintf("%s: porting of %s (%s)\n", SyncCommitBodyHeader, c.ShortSHA(), commitURL))
+		if recovered {
+			commitMsg.WriteString(fmt.Sprintf("%s: merge conflict resolution has been applied\n", SyncCommitBodyHeader))
+		}
+		err = git.Do("commit", "--amend", "-m", commitMsg.String())
+		if err != nil {
+			logrus.Error("failed appending metadata to commit message")
+			return err
+		}
 	}
 	return nil
+}
+
+func commitMessageWithNoSyncMarkers(s string) string {
+	var res strings.Builder
+	for _, l := range strings.Split(s, "\n") {
+		if !strings.HasPrefix(l, SyncCommitBodyHeader) {
+			res.WriteString(l + "\n")
+		}
+	}
+	return res.String()
 }
