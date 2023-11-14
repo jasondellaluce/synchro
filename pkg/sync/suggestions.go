@@ -35,6 +35,8 @@ func formatConflictSuggestion(t *template.Template, info *conflictSuggestionInfo
 	return b.String()
 }
 
+// todo: add suggestions for SYNC_IGNORE
+// todo: support new markers such as SYNC_USEFORK, or SYNC_USEUPSTREAM
 var contentConflictSuggestion = template.Must(template.New("contentConflictSuggestion").Parse(strings.TrimSpace(`
 Issue context:
 
@@ -61,6 +63,4 @@ Action items:
    ` + "`" + `git cherry-pick --continue` + "`" + `
 6. Update fork's conflict resolution cache so that this won't be asked again:
    ` + "`" + `synchro rerere push` + "`" + `
-7. Push the updated branch:
-   ` + "`" + `git push origin {{ .BranchName }}` + "`" + `
 `)))
