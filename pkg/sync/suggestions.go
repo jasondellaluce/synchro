@@ -52,8 +52,8 @@ Action items:
 2. Checkout fork repo and cd into it:
    ` + "`" + `cd /tmp && git clone git@github.com:{{ .ForkOrg }}/{{ .ForkRepo }}.git && cd {{ .ForkRepo }}` + "`" + `
 3. Make sure ` + "`" + `git rerere` + "`" + ` is enabled in the repo and pull latest cached resolutions:
-   ` + "`" + `git config --global rerere.enabled true` + "`" + `
-   ` + "`" + `synchro rerere pull` + "`" + `
+   ` + "`" + `git config rerere.enabled true` + "`" + `
+   ` + "`" + `synchro conflict pull` + "`" + `
 4. Checkout unfinished sync branch:
    ` + "`" + `git fetch origin` + "`" + `
    ` + "`" + `git checkout {{ .BranchName }}` + "`" + `
@@ -62,5 +62,5 @@ Action items:
    ... solve conflicts manually, then stage all changes...
    ` + "`" + `git cherry-pick --continue` + "`" + `
 6. Update fork's conflict resolution cache so that this won't be asked again:
-   ` + "`" + `synchro rerere push` + "`" + `
+   ` + "`" + `synchro conflict push` + "`" + `
 `)))
