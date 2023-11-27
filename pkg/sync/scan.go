@@ -16,13 +16,13 @@ import (
 // commit should be ignored during the scanning process.
 const IgnoreCommitMarker = "SYNC_IGNORE"
 
-// Scan analyzes both the base and the fork repositories specified in the given
+// Scan analyzes both the upstream and the fork repositories specified in the given
 // scan request, and returns a list of commit info representing the restricted
 // set of commits that are present in the fork exclusively in the form of
 // private patches. Returns a non-nil error in case of failure.
 func scan(ctx context.Context, client *github.Client, req *Request) ([]*commitInfo, error) {
-	logrus.Infof("initiating fork scan for repository %s/%s with base %s/%s", req.ForkOrg, req.ForkRepo, req.UpstreamOrg, req.UpstreamRepo)
-	defer logrus.Infof("finished fork scan for repository %s/%s with base %s/%s", req.ForkOrg, req.ForkRepo, req.UpstreamOrg, req.UpstreamRepo)
+	logrus.Infof("initiating fork scan for repository %s/%s with upstream %s/%s", req.ForkOrg, req.ForkRepo, req.UpstreamOrg, req.UpstreamRepo)
+	defer logrus.Infof("finished fork scan for repository %s/%s with upstream %s/%s", req.ForkOrg, req.ForkRepo, req.UpstreamOrg, req.UpstreamRepo)
 
 	// iterate through the commits of the fork
 	var result []*commitInfo
@@ -31,9 +31,9 @@ func scan(ctx context.Context, client *github.Client, req *Request) ([]*commitIn
 			info, err := scanRepoCommit(ctx, client, req, c)
 			if err == nil {
 				if info != nil {
-					basePRs := info.pullRequestsOfRepo(req.UpstreamOrg, req.UpstreamRepo)
-					if len(info.PullRequests) == 1 && len(basePRs) == 1 && basePRs[0].MergedAt != nil {
-						logrus.Debugf("commit is only part of a base repo PR, stopping")
+					upstreamPRs := info.pullRequestsOfRepo(req.UpstreamOrg, req.UpstreamRepo)
+					if len(info.PullRequests) == 1 && len(upstreamPRs) == 1 && upstreamPRs[0].MergedAt != nil {
+						logrus.Debugf("commit is only part of a upstream repo PR, stopping")
 						return utils.ErrSeqBreakout
 					}
 					result = append(result, info)
@@ -60,10 +60,10 @@ func scanRepoCommit(ctx context.Context, client *github.Client, req *Request, c 
 	}
 	res.PullRequests = pulls
 
-	logrus.Debugf("listing pull requests in base repository %s/%s", req.UpstreamOrg, req.UpstreamRepo)
+	logrus.Debugf("listing pull requests in upstream repository %s/%s", req.UpstreamOrg, req.UpstreamRepo)
 	pulls, err = utils.CollectSequence(iteratePullRequestsByCommitSHA(ctx, client, req.UpstreamOrg, req.UpstreamRepo, res.SHA()))
 	if err != nil {
-		logrus.Debugf("commit probably not found in base repo, purposely ignoring error: %s", err.Error())
+		logrus.Debugf("commit probably not found in upstream repo, purposely ignoring error: %s", err.Error())
 	} else {
 		res.PullRequests = append(res.PullRequests, pulls...)
 	}
@@ -88,7 +88,7 @@ func scanRepoCommit(ctx context.Context, client *github.Client, req *Request, c 
 			logrus.Infof("refed pull request probably still OPEN or DRAFT, picking commit")
 		}
 	} else {
-		logrus.Info("no ref to base repository found for commit")
+		logrus.Info("no ref to upstream repository found for commit")
 	}
 
 	logrus.Debugf("commit is being picked, checking if we should ignore it")
@@ -173,7 +173,7 @@ func searchPullRequestRefs(org, repo, text string) ([]int, error) {
 	return res, nil
 }
 
-// returns the pull request number relative to the base repo
+// returns the pull request number relative to the upstream repo
 func searchForkCommitRef(ctx context.Context, client *github.Client, req *Request, c *commitInfo) (int, error) {
 	// search in pull request body
 	for _, pr := range c.pullRequestsOfRepo(req.ForkOrg, req.ForkRepo) {
@@ -183,7 +183,7 @@ func searchForkCommitRef(ctx context.Context, client *github.Client, req *Reques
 		}
 		if commitRefsAreAmbiguos(refs) {
 			url := fmt.Sprintf("https://github.com/%s/%s/pull/%d", req.ForkOrg, req.ForkRepo, pr.GetNumber())
-			return 0, fmt.Errorf("pull requests body contains multiple base repo refs and may be ambiguous: %s", url)
+			return 0, fmt.Errorf("pull requests body contains multiple upstream repo refs and may be ambiguous: %s", url)
 		}
 		if len(refs) > 0 {
 			logrus.Infof("found ref in pull request body #%d", pr.GetNumber())
@@ -198,7 +198,7 @@ func searchForkCommitRef(ctx context.Context, client *github.Client, req *Reques
 	}
 	if commitRefsAreAmbiguos(refs) {
 		url := fmt.Sprintf("https://github.com/%s/%s/commit/%s)", req.ForkOrg, req.ForkRepo, c.SHA())
-		return 0, fmt.Errorf("commit message contains multiple base repo refs and may be ambiguous: %s", url)
+		return 0, fmt.Errorf("commit message contains multiple upstream repo refs and may be ambiguous: %s", url)
 	}
 	if len(refs) > 0 {
 		logrus.Infof("found ref in commit message of %s", c.SHA())
@@ -217,7 +217,7 @@ func searchForkCommitRef(ctx context.Context, client *github.Client, req *Reques
 		}
 		if commitRefsAreAmbiguos(refs) {
 			url := fmt.Sprintf("https://github.com/%s/%s/commit/%s)", req.ForkOrg, req.ForkRepo, c.SHA())
-			return 0, fmt.Errorf("commit comment contains multiple base repo refs and may be ambiguous: %s", url)
+			return 0, fmt.Errorf("commit comment contains multiple upstream repo refs and may be ambiguous: %s", url)
 		}
 		if len(refs) > 0 {
 			logrus.Infof("found ref in one comment body of %s", c.SHA())
