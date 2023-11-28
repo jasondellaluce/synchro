@@ -4,7 +4,7 @@ type CommitMarker string
 
 const (
 	// IgnoreCommitMarker is a keyword that can be used for signaling that a given
-	// commit should be ignored during the scanning process.
+	// commit should be ignored during the sync process.
 	CommitMarkerIgnore CommitMarker = "SYNC_IGNORE"
 
 	// CommitMarkerConflictSkip is a keyword that can be used for signaling that a given
@@ -17,7 +17,7 @@ const (
 	CommitMarkerConflictApply CommitMarker = "SYNC_CONFLICT_APPLY"
 )
 
-// A collection of all commit markers available
+// AllCommitMarkers is a collection of all commit markers supported
 var AllCommitMarkers = []CommitMarker{
 	CommitMarkerIgnore,
 	CommitMarkerConflictSkip,
@@ -29,5 +29,14 @@ func (c CommitMarker) String() string {
 }
 
 func (c CommitMarker) Description() string {
-	return "TODO"
+	switch c {
+	case CommitMarkerIgnore:
+		return "The commit should be ignored during the sync"
+	case CommitMarkerConflictSkip:
+		return "In case of a merge conflict, the conflicting changes of the commit should be skipped"
+	case CommitMarkerConflictApply:
+		return "In case of a merge conflict, the conflicting changes of the commit should be forcefully applied"
+	default:
+		panic("CommitMarker.Description invoked on invalid instance")
+	}
 }

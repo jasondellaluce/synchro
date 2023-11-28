@@ -198,8 +198,8 @@ func getDeleteRenameConflictInfos(s string) ([]ConflictInfo, error) {
 			return nil, fmt.Errorf("unexpected regex match when looking for delete/rename merge conflict error")
 		}
 		res = append(res, &deleteRenameConflictInfo{
-			UpstreamDeleted: m[1],
-			ForkRenamed:     m[2],
+			UpstreamDeleted:   m[1],
+			DownstreamRenamed: m[2],
 		})
 	}
 	return res, nil
@@ -213,9 +213,9 @@ func getRenameRenameConflictInfos(s string) ([]ConflictInfo, error) {
 			return nil, fmt.Errorf("unexpected regex match when looking for rename/rename merge conflict error")
 		}
 		res = append(res, &renameRenameConflictInfo{
-			UpstreamOriginal: m[1],
-			UpstreamRenamed:  m[2],
-			ForkRenamed:      m[3],
+			UpstreamOriginal:  m[1],
+			UpstreamRenamed:   m[2],
+			DownstreamRenamed: m[3],
 		})
 	}
 	return res, nil

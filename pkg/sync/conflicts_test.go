@@ -32,8 +32,8 @@ CONFLICT (rename/delete): c.txt renamed to c2.txt in 4b258cd86 (test), but delet
 	t.Run("delete-rename", func(t *testing.T) {
 		expected := []*deleteRenameConflictInfo{
 			{
-				UpstreamDeleted: "c.txt",
-				ForkRenamed:     "c2.txt",
+				UpstreamDeleted:   "c.txt",
+				DownstreamRenamed: "c2.txt",
 			},
 		}
 		conflicts, err := getDeleteRenameConflictInfos(conflictSample2)
@@ -44,9 +44,9 @@ CONFLICT (rename/delete): c.txt renamed to c2.txt in 4b258cd86 (test), but delet
 	t.Run("rename-rename", func(t *testing.T) {
 		expected := []*renameRenameConflictInfo{
 			{
-				UpstreamOriginal: "a.txt",
-				UpstreamRenamed:  "a2.txt",
-				ForkRenamed:      "a3.txt",
+				UpstreamOriginal:  "a.txt",
+				UpstreamRenamed:   "a2.txt",
+				DownstreamRenamed: "a3.txt",
 			},
 		}
 		conflicts, err := getRenameRenameConflictInfos(conflictSample2)
