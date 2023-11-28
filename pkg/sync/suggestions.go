@@ -35,10 +35,8 @@ func formatConflictSuggestion(t *template.Template, info *conflictSuggestionInfo
 	return b.String()
 }
 
-// todo: add suggestions for SYNC_IGNORE
-// todo: support new markers such as SYNC_USEFORK, or SYNC_USEUPSTREAM
 var contentConflictSuggestion = template.Must(template.New("contentConflictSuggestion").Parse(strings.TrimSpace(`
-Issue context:
+Context:
 
 * A merge conflict occurred and can't be resolved automatically
 * Upstream base ref: https://github.com/{{ .UpstreamOrg }}/{{ .UpstreamRepo }}/tree/{{ .UpstreamRef}}
@@ -47,8 +45,9 @@ Issue context:
 
 Action items:
 
-1. Make sure to have installed both ` + "`" + `git` + "`" + ` and ` + "`" + `synchro` + "`" + ` ({{ .ProjectRepo }}):
-   ` + "`" + `go install {{ .PackageName }}@latest` + "`" + `
+Consider using a commit marker ({{ .ProjectRepo }}#commit-markers), or solve the conflict manually by:
+
+1. Make sure to have installed both ` + "`" + `git` + "`" + ` and ` + "`" + `synchro` + "`" + ` ({{ .ProjectRepo }}#installing).
 2. Checkout fork repo and cd into it:
    ` + "`" + `cd /tmp && git clone git@github.com:{{ .ForkOrg }}/{{ .ForkRepo }}.git && cd {{ .ForkRepo }}` + "`" + `
 3. Make sure ` + "`" + `git rerere` + "`" + ` is enabled in the repo and pull latest cached resolutions:
@@ -59,7 +58,7 @@ Action items:
    ` + "`" + `git checkout {{ .BranchName }}` + "`" + `
 5. Apply the conflicting commit, solve the conflict manually, and commit it:
    ` + "`" + `git cherry-pick {{ .ConflictCommitSHA }}` + "`" + `
-   ... solve conflicts manually, then stage all changes...
+   ... solve conflicts manually and stage all changes...
    ` + "`" + `git cherry-pick --continue` + "`" + `
 6. Update fork's conflict resolution cache so that this won't be asked again:
    ` + "`" + `synchro conflict push` + "`" + `
