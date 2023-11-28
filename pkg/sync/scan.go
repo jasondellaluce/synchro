@@ -12,10 +12,6 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
-// IgnoreCommitMarker is a keyword that can be used for signaling that a given
-// commit should be ignored during the scanning process.
-const IgnoreCommitMarker = "SYNC_IGNORE"
-
 // Scan analyzes both the upstream and the fork repositories specified in the given
 // scan request, and returns a list of commit info representing the restricted
 // set of commits that are present in the fork exclusively in the form of
@@ -92,12 +88,12 @@ func scanRepoCommit(ctx context.Context, client *github.Client, req *Request, c 
 	}
 
 	logrus.Debugf("commit is being picked, checking if we should ignore it")
-	ignore, err := checkCommitShouldBeIgnored(ctx, client, req, res)
+	err = searchCommitMarkers(ctx, client, req, res)
 	if err != nil {
 		return nil, err
 	}
-	if ignore {
-		logrus.Infof("deteted ignore marker %s, skipping commit", IgnoreCommitMarker)
+	if res.HasMarker(CommitMarkerIgnore) {
+		logrus.Infof("deteted ignore marker %s, skipping commit", CommitMarkerIgnore)
 		return nil, nil
 	}
 
@@ -229,15 +225,27 @@ func searchForkCommitRef(ctx context.Context, client *github.Client, req *Reques
 }
 
 // returns true if the commit should be ignored for the given scan request
-func checkCommitShouldBeIgnored(ctx context.Context, client *github.Client, req *Request, c *commitInfo) (bool, error) {
-	comments, err := c.getComments(ctx, client, req.ForkOrg, req.ForkRepo)
-	if err != nil {
-		return false, err
-	}
-	for _, comment := range comments {
-		if strings.Contains(comment.GetBody(), IgnoreCommitMarker) {
-			return true, nil
+func searchCommitMarkers(ctx context.Context, client *github.Client, req *Request, c *commitInfo) error {
+	c.Markers = make(map[string]bool)
+
+	// search in commit's message
+	for _, m := range AllCommitMarkers {
+		if strings.Contains(c.Message(), m) {
+			c.Markers[m] = true
 		}
 	}
-	return false, nil
+
+	// search in commit's comments
+	comments, err := c.getComments(ctx, client, req.ForkOrg, req.ForkRepo)
+	if err != nil {
+		return err
+	}
+	for _, comment := range comments {
+		for _, m := range AllCommitMarkers {
+			if strings.Contains(comment.GetBody(), m) {
+				c.Markers[m] = true
+			}
+		}
+	}
+	return nil
 }
