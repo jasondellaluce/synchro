@@ -230,8 +230,8 @@ func searchCommitMarkers(ctx context.Context, client *github.Client, req *Reques
 
 	// search in commit's message
 	for _, m := range AllCommitMarkers {
-		if strings.Contains(c.Message(), m) {
-			c.Markers[m] = true
+		if strings.Contains(c.Message(), m.String()) {
+			c.Markers[m.String()] = true
 		}
 	}
 
@@ -242,8 +242,8 @@ func searchCommitMarkers(ctx context.Context, client *github.Client, req *Reques
 	}
 	for _, comment := range comments {
 		for _, m := range AllCommitMarkers {
-			if strings.Contains(comment.GetBody(), m) {
-				c.Markers[m] = true
+			if strings.Contains(comment.GetBody(), m.String()) {
+				c.Markers[m.String()] = true
 			}
 		}
 	}

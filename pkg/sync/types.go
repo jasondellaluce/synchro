@@ -9,28 +9,6 @@ import (
 	"github.com/jasondellaluce/synchro/pkg/utils"
 )
 
-const (
-	// IgnoreCommitMarker is a keyword that can be used for signaling that a given
-	// commit should be ignored during the scanning process.
-	CommitMarkerIgnore = "SYNC_IGNORE"
-
-	// CommitMarkerConflictSkip is a keyword that can be used for signaling that a given
-	// commit should be skipped in case of a merge conflict
-	CommitMarkerConflictSkip = "SYNC_CONFLICT_SKIP"
-
-	// CommitMarkerConflictApply is a keyword that can be used for signaling that a given
-	// commit should be always applied in case of a merge conflict. In case
-	// of content conflict markers, the commit's markers are chosen.
-	CommitMarkerConflictApply = "SYNC_CONFLICT_APPLY"
-)
-
-// A collection of all commit markers available
-var AllCommitMarkers = []string{
-	CommitMarkerIgnore,
-	CommitMarkerConflictSkip,
-	CommitMarkerConflictApply,
-}
-
 // Request contains all the info required for performing a fork scan
 type Request struct {
 	UpstreamOrg     string
@@ -54,8 +32,8 @@ type commitInfo struct {
 	commentsRepo string
 }
 
-func (c *commitInfo) HasMarker(m string) bool {
-	_, ok := c.Markers[m]
+func (c *commitInfo) HasMarker(m CommitMarker) bool {
+	_, ok := c.Markers[m.String()]
 	return ok
 }
 
