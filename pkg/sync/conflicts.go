@@ -108,7 +108,7 @@ func attemptMergeConflictRecovery(git utils.GitHelper, out string, req *Request,
 		if len(out) > 0 {
 			cc, err := getContentConflictInfos(out)
 			if err != nil {
-				return fmt.Errorf("could not parse for content conflicts: %s", err.Error())
+				return fmt.Errorf("could not parse content conflicts: %s", err.Error())
 			}
 
 			for _, conflict := range cc {
@@ -267,7 +267,7 @@ func getContentConflictInfos(s string) ([]ConflictInfo, error) {
 	for scanner.Scan() {
 		tokens := strings.Split(scanner.Text(), ":")
 		if len(tokens) < 2 {
-			return nil, fmt.Errorf("can't parse content conflict line: %s", scanner.Text())
+			return nil, fmt.Errorf("can't parse content conflict output: %s", s)
 		}
 		fileName := tokens[0]
 		_, ok := files[fileName]
