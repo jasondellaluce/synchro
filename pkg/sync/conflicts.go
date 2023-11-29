@@ -267,7 +267,7 @@ func getContentConflictInfos(s string) ([]ConflictInfo, error) {
 	for scanner.Scan() {
 		tokens := strings.Split(scanner.Text(), ":")
 		if len(tokens) < 2 {
-			return nil, fmt.Errorf("can't parse content conflict output: %s", s)
+			continue
 		}
 		fileName := tokens[0]
 		_, ok := files[fileName]
