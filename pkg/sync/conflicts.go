@@ -95,7 +95,12 @@ func attemptMergeConflictRecovery(git utils.GitHelper, out string, req *Request,
 	if numContentConflicts > 0 {
 		out, err := git.DoOutput("diff", "--check")
 		if err != nil {
-			return fmt.Errorf("could not check for content conflicts: %s", err.Error())
+			// the only error we can ignore is the exist status one, which is
+			// used by the --check option for indicating issues (reported in output)
+			// see: https://git-scm.com/docs/git-diff#Documentation/git-diff.txt---check
+			if !(strings.Contains(err.Error(), "exit status") && len(out) > 0) {
+				return fmt.Errorf("could not check for content conflicts: %s", err.Error())
+			}
 		}
 
 		// the output will not be empty if there are remaining content conflicts.
