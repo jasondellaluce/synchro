@@ -38,6 +38,7 @@ type GitHelper interface {
 	BranchExistsInRemote(remote, branch string) (bool, error)
 	GetRepoRootDir() (string, error)
 	GetRemotes() (map[string]string, error)
+	TagExists(tag string) (bool, error)
 }
 
 type cmdExecutor interface {
@@ -170,4 +171,12 @@ func (g *gitHelper) GetRemotes() (map[string]string, error) {
 		res[tokens[0]] = tokens[1]
 	}
 	return res, nil
+}
+
+func (g *gitHelper) TagExists(tag string) (bool, error) {
+	out, err := g.DoOutput("tag", "-l", tag)
+	if err != nil {
+		return false, err
+	}
+	return len(out) > 0, nil
 }

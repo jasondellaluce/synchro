@@ -47,7 +47,16 @@ func withTempGitRemote(git utils.GitHelper, remote, url string, f func() error) 
 }
 
 func withTempLocalBranch(git utils.GitHelper, localBranch, remote, remoteBranch string, f func() error) error {
-	remoteRef := fmt.Sprintf("%s/%s", remote, remoteBranch)
+	// note: the remote ref may be a tag, so we need to check it first
+	isTag, err := git.TagExists(remoteBranch)
+	if err != nil {
+		return err
+	}
+	remoteRef := remoteBranch
+	if !isTag {
+		remoteRef = fmt.Sprintf("%s/%s", remote, remoteBranch)
+	}
+
 	logrus.Infof("moving into local branch '%s' tracking '%s'", localBranch, remoteRef)
 
 	// get current branch

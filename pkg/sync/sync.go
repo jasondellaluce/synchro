@@ -95,11 +95,11 @@ func applyAllPatches(ctx context.Context, git utils.GitHelper, req *Request, sca
 			logrus.Error("failed obtaining latest commit message")
 			return err
 		}
-		commitURL := fmt.Sprintf("https://github.com/%s/%s/commit/%s)", req.ForkOrg, req.ForkRepo, c.SHA())
+		commitURL := fmt.Sprintf("https://github.com/%s/%s/commit/%s", req.ForkOrg, req.ForkRepo, c.SHA())
 		commitMsg.WriteString(commitMessageWithNoSyncMarkers(prevMsg) + "\n\n")
 		commitMsg.WriteString(fmt.Sprintf("%s: porting of %s (%s)\n", SyncCommitBodyHeader, c.ShortSHA(), commitURL))
 		if recovered {
-			commitMsg.WriteString(fmt.Sprintf("%s: merge conflict resolution has been applied\n", SyncCommitBodyHeader))
+			commitMsg.WriteString(fmt.Sprintf("%s: solved merge conflicts automatically\n", SyncCommitBodyHeader))
 		}
 		err = git.Do("commit", "--amend", "-m", commitMsg.String())
 		if err != nil {
