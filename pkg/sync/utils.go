@@ -47,13 +47,13 @@ func withTempGitRemote(git utils.GitHelper, remote, url string, f func() error) 
 }
 
 func withTempLocalBranch(git utils.GitHelper, localBranch, remote, remoteBranch string, f func() error) error {
-	// note: the remote ref may be a tag, so we need to check it first
-	isTag, err := git.TagExists(remoteBranch)
+	// note: the remote ref is generally a branch, but we need to check it first
+	isBranch, err := git.BranchExists(remoteBranch)
 	if err != nil {
 		return err
 	}
 	remoteRef := remoteBranch
-	if !isTag {
+	if isBranch {
 		remoteRef = fmt.Sprintf("%s/%s", remote, remoteBranch)
 	}
 
