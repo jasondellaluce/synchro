@@ -19,6 +19,7 @@ func init() {
 var rootCmd = &cobra.Command{
 	Use:          utils.ProjectName,
 	Short:        utils.ProjectDescription,
+	Version:      utils.ProjectVersion,
 	SilenceUsage: true,
 	PersistentPreRun: func(cmd *cobra.Command, args []string) {
 		logrus.SetOutput(os.Stderr)
