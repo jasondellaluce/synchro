@@ -39,7 +39,6 @@ type GitHelper interface {
 	GetRepoRootDir() (string, error)
 	GetRemotes() (map[string]string, error)
 	TagExists(tag string) (bool, error)
-	BranchExists(branch string) (bool, error)
 }
 
 type cmdExecutor interface {
@@ -180,9 +179,4 @@ func (g *gitHelper) TagExists(tag string) (bool, error) {
 		return false, err
 	}
 	return len(out) > 0, nil
-}
-
-func (g *gitHelper) BranchExists(branch string) (bool, error) {
-	err := g.Do("show-ref", "--verify", "refs/heads/"+branch)
-	return err == nil, nil
 }

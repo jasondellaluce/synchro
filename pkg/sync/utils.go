@@ -48,7 +48,7 @@ func withTempGitRemote(git utils.GitHelper, remote, url string, f func() error) 
 
 func withTempLocalBranch(git utils.GitHelper, localBranch, remote, remoteBranch string, f func() error) error {
 	// note: the remote ref is generally a branch, but we need to check it first
-	isBranch, err := git.BranchExists(remoteBranch)
+	isBranch, err := git.BranchExistsInRemote(remote, remoteBranch)
 	if err != nil {
 		return err
 	}
