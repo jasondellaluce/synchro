@@ -25,8 +25,8 @@ func init() {
 	SyncCmd.Flags().StringVarP(&syncBranch, "branch", "b", "", "the fork's synched output branch")
 	SyncCmd.Flags().StringVarP(&syncHead, "head", "c", "", "the head ref of the fork from which commits are scanned")
 	SyncCmd.Flags().StringVarP(&syncRepo, "repo", "r", "", "the GitHub repository of the fork in the form <org>/<repo>")
-	SyncCmd.Flags().StringVarP(&syncHeadUpstream, "upstream-head", "C", "", "the head ref of the forked repositoy on which appending the fork's scanned commits")
-	SyncCmd.Flags().StringVarP(&syncRepoUpstream, "upstream-repo", "R", "", "the forked GitHub repository in the form <org>/<repo>")
+	SyncCmd.Flags().StringVarP(&syncHeadUpstream, "upstream-head", "C", "", "the head ref of the upstream repositoy on which appending the fork's scanned commits")
+	SyncCmd.Flags().StringVarP(&syncRepoUpstream, "upstream-repo", "R", "", "the upstream GitHub repository in the form <org>/<repo>")
 }
 
 var SyncCmd = &cobra.Command{
