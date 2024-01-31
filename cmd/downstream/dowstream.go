@@ -5,11 +5,11 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"time"
 
-	"github.com/google/go-github/v56/github"
 	"github.com/hashicorp/go-multierror"
+	"github.com/jasondellaluce/synchro/pkg/downstream"
 	"github.com/jasondellaluce/synchro/pkg/utils"
-	"github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 )
 
@@ -19,6 +19,7 @@ var (
 	repoUpstream  string
 	headUpstream  string
 	prNumUpstream uint
+	searchAfter   string
 )
 
 func init() {
@@ -28,6 +29,8 @@ func init() {
 	DownstreamCmd.PersistentFlags().StringVarP(&headUpstream, "upstream-head", "C", "", "the head ref of the upstream repositoy on which appending the fork's scanned commits")
 	DownstreamCmd.PersistentFlags().StringVarP(&repoUpstream, "upstream-repo", "R", "", "the upstream GitHub repository in the form <org>/<repo>")
 	DownstreamCmd.AddCommand(DownstreamSuggestCmd)
+
+	DownstreamSuggestCmd.Flags().StringVar(&searchAfter, "search-after", time.Now().AddDate(0, 0, -7).Format(time.RFC3339), "timestamp after which searching merged pull requests (RFC3339 format)")
 }
 
 var DownstreamCmd = &cobra.Command{
@@ -61,70 +64,25 @@ var DownstreamSuggestCmd = &cobra.Command{
 			return err
 		}
 
-		ctx := context.Background()
-		git := utils.NewGitHelper()
-		client := utils.GetGithubClient()
+		searchAfterTs, err := time.Parse(time.RFC3339, searchAfter)
+		if err != nil {
+			return err
+		}
 
 		upstreamOrg, upstreamRepoName, err := getOrgRepo(repoUpstream)
 		if err != nil {
 			return err
 		}
 
-		// get current branch
-		curBranch, err := git.GetCurrentBranch()
-		if err != nil {
-			return err
-		}
-		logrus.Debugf("current branch is '%s'", curBranch)
-		if curBranch != head {
-			// moving to head, and get back once we're done
-			err = git.Do("checkout", head)
-			if err != nil {
-				return err
-			}
-			defer func() { git.Do("checkout", curBranch) }()
-		}
-
-		pulls := iterateMergedPullRequests(ctx, client, upstreamOrg, upstreamRepoName, headUpstream)
-		return utils.ConsumeSequence(pulls, func(v *github.PullRequest) error {
-			//logrus.Infof("checking pull request %d merged at %s: %s", v.GetNumber(), v.GetMergedAt().String(), v.GetHTMLURL())
-			commits, err := utils.CollectSequence(iteratePullRequestCommits(ctx, client, upstreamOrg, upstreamRepoName, v.GetNumber()))
-			if err != nil {
-				return err
-			}
-
-			numCommits := 0
-			numFoundCommits := 0
-			for _, c := range commits {
-				msgLines := strings.Split(c.GetCommit().GetMessage(), "\n")
-				if len(msgLines) == 0 {
-					return fmt.Errorf("found commit with empty body: %s", c.GetSHA())
-				}
-				out, err := git.DoOutput("log", "--fixed-strings", "--grep", msgLines[0])
-				if err != nil {
-					return err
-				}
-				if len(out) > 0 {
-					numFoundCommits++
-				}
-				numCommits++
-			}
-
-			// it may happen that a PR has been partially downstreamed in
-			// the fork and some of its commits have been discarded. In such
-			// a case, we'll not suggest it as a dowstream candidate but we'll
-			// log it for sake of transparency
-			if numFoundCommits > 0 && numFoundCommits < numCommits {
-				logrus.Warningf("pull request %d has been partially ported (%d/%d commits): %s", v.GetNumber(), numFoundCommits, numCommits, v.GetHTMLURL())
-			}
-
-			// if none of the PR's commit are present in the downstream fork
-			// history (checked from the provided head), then we can conclude
-			// that the PR is a good candidate to be downstreamed.
-			if numFoundCommits == 0 {
-				fmt.Printf("%d, %s, %s\n", v.GetNumber(), v.GetHTMLURL(), v.GetTitle())
-			}
-			return nil
+		ctx := context.Background()
+		git := utils.NewGitHelper()
+		client := utils.GetGithubClient()
+		return downstream.Suggest(ctx, git, client, &downstream.SuggestRequest{
+			UpstreamOrg:     upstreamOrg,
+			UpstreamRepo:    upstreamRepoName,
+			UpstreamHeadRef: headUpstream,
+			ForkHeadRef:     head,
+			SearchAfter:     searchAfterTs,
 		})
 	},
 }
@@ -149,27 +107,4 @@ func getOrgRepo(s string) (string, string, error) {
 		return "", "", fmt.Errorf("repository must be in the form <org>/<repo>: %s", s)
 	}
 	return tokens[0], tokens[1], nil
-}
-
-func iterateMergedPullRequests(ctx context.Context, client *github.Client, org, repo, base string) utils.Sequence[github.PullRequest] {
-	it := utils.NewGithubSequence(
-		func(o *github.ListOptions) ([]*github.PullRequest, *github.Response, error) {
-			return client.PullRequests.List(ctx, org, repo, &github.PullRequestListOptions{
-				ListOptions: *o,
-				Base:        base,
-				State:       "closed",
-				Sort:        "updated",
-				Direction:   "desc",
-			})
-		})
-	return utils.NewFilteredSequence(it, func(pr *github.PullRequest) bool {
-		return (pr.Merged != nil && pr.GetMerged()) || pr.MergedAt != nil
-	})
-}
-
-func iteratePullRequestCommits(ctx context.Context, client *github.Client, org, repo string, prNum int) utils.Sequence[github.RepositoryCommit] {
-	return utils.NewGithubSequence(
-		func(o *github.ListOptions) ([]*github.RepositoryCommit, *github.Response, error) {
-			return client.PullRequests.ListCommits(ctx, org, repo, prNum, o)
-		})
 }
