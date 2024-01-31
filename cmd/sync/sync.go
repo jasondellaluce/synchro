@@ -1,4 +1,4 @@
-package cmd
+package sync
 
 import (
 	"context"
@@ -21,16 +21,15 @@ var (
 )
 
 func init() {
-	rootCmd.AddCommand(syncCmd)
-	syncCmd.Flags().BoolVar(&syncDryRun, "dryrun", false, "preview the sync changes")
-	syncCmd.Flags().StringVarP(&syncBranch, "branch", "b", "", "the fork's synched output branch")
-	syncCmd.Flags().StringVarP(&syncHead, "head", "c", "", "the head ref of the fork from which commits are scanned")
-	syncCmd.Flags().StringVarP(&syncRepo, "repo", "r", "", "the GitHub repository of the fork in the form <org>/<repo>")
-	syncCmd.Flags().StringVarP(&syncHeadUpstream, "upstream-head", "C", "", "the head ref of the forked repositoy on which appending the fork's scanned commits")
-	syncCmd.Flags().StringVarP(&syncRepoUpstream, "upstream-repo", "R", "", "the forked GitHub repository in the form <org>/<repo>")
+	SyncCmd.Flags().BoolVar(&syncDryRun, "dryrun", false, "preview the sync changes")
+	SyncCmd.Flags().StringVarP(&syncBranch, "branch", "b", "", "the fork's synched output branch")
+	SyncCmd.Flags().StringVarP(&syncHead, "head", "c", "", "the head ref of the fork from which commits are scanned")
+	SyncCmd.Flags().StringVarP(&syncRepo, "repo", "r", "", "the GitHub repository of the fork in the form <org>/<repo>")
+	SyncCmd.Flags().StringVarP(&syncHeadUpstream, "upstream-head", "C", "", "the head ref of the forked repositoy on which appending the fork's scanned commits")
+	SyncCmd.Flags().StringVarP(&syncRepoUpstream, "upstream-repo", "R", "", "the forked GitHub repository in the form <org>/<repo>")
 }
 
-var syncCmd = &cobra.Command{
+var SyncCmd = &cobra.Command{
 	Use:   "sync",
 	Short: "Syncs the fork to an upstream ref by appending all the custom commits",
 	RunE: func(cmd *cobra.Command, args []string) error {
@@ -64,7 +63,7 @@ var syncCmd = &cobra.Command{
 		}
 
 		ctx := context.Background()
-		client := getGithubClient()
+		client := utils.GetGithubClient()
 		return sync.Sync(
 			ctx,
 			utils.NewGitHelper(),

@@ -3,6 +3,10 @@ package cmd
 import (
 	"os"
 
+	"github.com/jasondellaluce/synchro/cmd/conflict"
+	"github.com/jasondellaluce/synchro/cmd/explain"
+	"github.com/jasondellaluce/synchro/cmd/readme"
+	"github.com/jasondellaluce/synchro/cmd/sync"
 	"github.com/jasondellaluce/synchro/pkg/utils"
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
@@ -14,6 +18,10 @@ var (
 
 func init() {
 	rootCmd.PersistentFlags().BoolVar(&rootVerbose, "verbose", false, "if true, turns the logger into more verbose")
+	rootCmd.AddCommand(sync.SyncCmd)
+	rootCmd.AddCommand(readme.ReadmeCmd)
+	rootCmd.AddCommand(explain.ExplainCmd)
+	rootCmd.AddCommand(conflict.ConflictCmd)
 }
 
 var rootCmd = &cobra.Command{

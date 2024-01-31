@@ -1,18 +1,15 @@
-package cmd
+package readme
 
 import (
 	"fmt"
 	"os"
 
+	"github.com/jasondellaluce/synchro/cmd/explain"
 	"github.com/jasondellaluce/synchro/pkg/utils"
 	"github.com/spf13/cobra"
 )
 
-func init() {
-	rootCmd.AddCommand(readmeCmd)
-}
-
-var readmeCmd = &cobra.Command{
+var ReadmeCmd = &cobra.Command{
 	Use:   "readme",
 	Short: "Generates a readme for the project",
 	Run: func(cmd *cobra.Command, args []string) {
@@ -21,8 +18,8 @@ var readmeCmd = &cobra.Command{
 		fmt.Fprintf(os.Stdout, "## Installing\n\n")
 		fmt.Fprintf(os.Stdout, "`go install %s@latest`\n\n", utils.PackageName)
 		fmt.Fprintf(os.Stdout, "#")
-		explainMarkersCmd.Run(cmd, args)
+		explain.ExplainMarkersCmd.Run(cmd, args)
 		fmt.Fprintf(os.Stdout, "\n#")
-		explainConflictsCmd.Run(cmd, args)
+		explain.ExplainConflictsCmd.Run(cmd, args)
 	},
 }

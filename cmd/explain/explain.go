@@ -1,4 +1,4 @@
-package cmd
+package explain
 
 import (
 	"fmt"
@@ -12,17 +12,16 @@ import (
 )
 
 func init() {
-	rootCmd.AddCommand(explainCmd)
-	explainCmd.AddCommand(explainMarkersCmd)
-	explainCmd.AddCommand(explainConflictsCmd)
+	ExplainCmd.AddCommand(ExplainMarkersCmd)
+	ExplainCmd.AddCommand(ExplainConflictsCmd)
 }
 
-var explainCmd = &cobra.Command{
+var ExplainCmd = &cobra.Command{
 	Use:   "explain",
 	Short: "Provide explanation about the tool's behavior",
 }
 
-var explainMarkersCmd = &cobra.Command{
+var ExplainMarkersCmd = &cobra.Command{
 	Use:   "markers",
 	Short: "Lists and describes the supported commit markers",
 	Run: func(cmd *cobra.Command, args []string) {
@@ -40,7 +39,7 @@ var explainMarkersCmd = &cobra.Command{
 	},
 }
 
-var explainConflictsCmd = &cobra.Command{
+var ExplainConflictsCmd = &cobra.Command{
 	Use:   "conflicts",
 	Short: "Lists and describes the supported merge conflict automatic resolution scenarios",
 	Run: func(cmd *cobra.Command, args []string) {
