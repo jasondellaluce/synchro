@@ -57,11 +57,11 @@ func Sync(ctx context.Context, git utils.GitHelper, client *github.Client, req *
 	remoteName := fmt.Sprintf("temp-%s-sync-upstream", utils.ProjectName)
 	remoteURL := fmt.Sprintf("https://github.com/%s/%s", req.UpstreamOrg, req.UpstreamRepo)
 	logrus.Infof("initiating fork sync for repository %s/%s with upstream %s/%s", req.ForkOrg, req.ForkRepo, req.UpstreamOrg, req.UpstreamRepo)
-	return withTempGitRemote(git, remoteName, remoteURL, func() error {
-		return withTempLocalBranch(git, req.OutBranch, remoteName, req.UpstreamHeadRef, func() error {
+	return utils.WithTempGitRemote(git, remoteName, remoteURL, func() error {
+		return utils.WithTempLocalBranch(git, req.OutBranch, remoteName, req.UpstreamHeadRef, func() (bool, error) {
 			// we're now at the HEAD of the branch in the upstream repository, in
 			// our local copy. Let's proceed cherry-picking all the patches.
-			return applyAllPatches(ctx, git, req, scanRes)
+			return false, applyAllPatches(ctx, git, req, scanRes)
 		})
 	})
 }
