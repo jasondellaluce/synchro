@@ -1,0 +1,17 @@
+project_name: synchro
+builds:
+  - id: "synchro"
+    goos:
+      - linux
+    goarch:
+      - amd64
+      - arm64
+    main: ./main.go
+    env:
+      - CGO_ENABLED=0
+    binary: synchro
+    ldflags:
+      - -X 'github.com/jasondellaluce/synchro/pkg/utils.ProjectVersion={{.Version}}'
+release:
+  github:
+  prerelease: auto
