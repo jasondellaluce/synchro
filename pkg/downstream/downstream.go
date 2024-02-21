@@ -54,6 +54,29 @@ func Downstream(ctx context.Context, git utils.GitHelper, client *github.Client,
 		return nil
 	}
 
+	logrus.Infof("checking if a pull request has already been opened for the same changes")
+	pullRequestAlreadyOpen := false
+	titlePrefix := fmt.Sprintf("downstream(#%d): ", req.UpstreamPullRequestNum)
+	searchFilter := fmt.Sprintf("type:pr repo:\"%s/%s\" \"%s\"", req.ForkOrg, req.ForkRepo, titlePrefix)
+	searchRes, _, err := client.Search.Issues(ctx, searchFilter, &github.SearchOptions{})
+	if err != nil {
+		return err
+	}
+	logrus.Infof("search found %d results", searchRes.GetTotal())
+	if searchRes.GetTotal() > 0 {
+		for _, issue := range searchRes.Issues {
+			logrus.Debugf("checking search result %s", issue.GetHTMLURL())
+			if issue.IsPullRequest() && strings.HasPrefix(issue.GetTitle(), titlePrefix) {
+				logrus.Infof("found existing pull request downstreaming same changes: %s", issue.GetHTMLURL())
+				pullRequestAlreadyOpen = true
+			}
+		}
+	}
+	if pullRequestAlreadyOpen && req.PushAndOpenPullRequest {
+		logrus.Warnf("skipping pull request due to changes being already downstreamed. Consider using the --no-push option if you wish to proceed in the local git repository")
+		return nil
+	}
+
 	var commitTitles []string
 	commits, err := utils.CollectSequence(iteratePullRequestCommits(ctx, client, req.UpstreamOrg, req.UpstreamRepo, req.UpstreamPullRequestNum))
 	if err != nil {
@@ -149,29 +172,6 @@ func pushAndOpenPullRequest(ctx context.Context, git utils.GitHelper, client *gi
 		return nil
 	}
 
-	logrus.Infof("checking if a pull request has already been opened for the same changes")
-	skip := false
-	titlePrefix := fmt.Sprintf("downstream(#%d): ", req.UpstreamPullRequestNum)
-	searchFilter := fmt.Sprintf("type:pr repo:\"%s/%s\" \"%s\"", req.ForkOrg, req.ForkRepo, titlePrefix)
-	searchRes, _, err := client.Search.Issues(ctx, searchFilter, &github.SearchOptions{})
-	if err != nil {
-		return err
-	}
-	logrus.Infof("search found %d results", searchRes.GetTotal())
-	if searchRes.GetTotal() > 0 {
-		for _, issue := range searchRes.Issues {
-			logrus.Debugf("checking search result %s", issue.GetHTMLURL())
-			if issue.IsPullRequest() && strings.HasPrefix(issue.GetTitle(), titlePrefix) {
-				logrus.Warnf("found existing pull request downstreaming same changes: %s", issue.GetHTMLURL())
-				skip = true
-			}
-		}
-	}
-	if skip {
-		logrus.Infof("skipping opening pull request")
-		return nil
-	}
-
 	// push branch on fork
 	logrus.Infof("pushing branch '%s' into %s/%s", branch, req.ForkOrg, req.ForkRepo)
 	err = git.Do("push", "-f", "origin", branch)
@@ -181,6 +181,7 @@ func pushAndOpenPullRequest(ctx context.Context, git utils.GitHelper, client *gi
 	}
 
 	logrus.Infof("opening new pull request in %s/%s", req.ForkOrg, req.ForkRepo)
+	titlePrefix := fmt.Sprintf("downstream(#%d): ", req.UpstreamPullRequestNum)
 	pullRequestTitle := fmt.Sprintf("%s%s", titlePrefix, prTitle)
 	pullRequestBody := fmt.Sprintf("Ref: https://github.com/%s/%s/pull/%d", req.UpstreamOrg, req.UpstreamRepo, req.UpstreamPullRequestNum)
 	pr, _, err := client.PullRequests.Create(ctx, req.ForkOrg, req.ForkRepo, &github.NewPullRequest{
