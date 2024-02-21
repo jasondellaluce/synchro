@@ -26,7 +26,21 @@ type DownstreamRequest struct {
 }
 
 func Downstream(ctx context.Context, git utils.GitHelper, client *github.Client, req *DownstreamRequest) error {
-	// todo: check that this repo's origin is the fork one
+	// check that the current repo is the actual fork and the tool
+	// is not erroneously run from the wrong repo
+	logrus.Infof("checking that the current repo is the fork one")
+	remotes, err := git.GetRemotes()
+	if err != nil {
+		return err
+	}
+	if len(remotes) == 0 {
+		return fmt.Errorf("can't find any remotes in current repo")
+	}
+	if originRemote, ok := remotes["origin"]; !ok {
+		return fmt.Errorf("can't find `origin` remote in current repo")
+	} else if !strings.Contains(originRemote, fmt.Sprintf("%s/%s", req.ForkOrg, req.ForkRepo)) {
+		return fmt.Errorf("current repo `origin` remote does not match the fork's one: %s", originRemote)
+	}
 
 	logrus.Infof("retrieving pull request #%d from %s/%s\n", req.UpstreamPullRequestNum, req.UpstreamOrg, req.UpstreamRepo)
 	pr, _, err := client.PullRequests.Get(ctx, req.UpstreamOrg, req.UpstreamRepo, req.UpstreamPullRequestNum)
