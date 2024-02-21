@@ -177,11 +177,11 @@ func searchForkCommitRef(ctx context.Context, client *github.Client, req *Reques
 		if err != nil {
 			return 0, err
 		}
-		if commitRefsAreAmbiguos(refs) {
-			url := fmt.Sprintf("https://github.com/%s/%s/pull/%d", req.ForkOrg, req.ForkRepo, pr.GetNumber())
-			return 0, fmt.Errorf("pull requests body contains multiple upstream repo refs and may be ambiguous: %s", url)
-		}
 		if len(refs) > 0 {
+			if commitRefsAreAmbiguos(refs) {
+				url := fmt.Sprintf("https://github.com/%s/%s/pull/%d", req.ForkOrg, req.ForkRepo, pr.GetNumber())
+				logrus.Warnf("pull requests body contains multiple upstream repo refs and may be ambiguous: %s", url)
+			}
 			logrus.Infof("found ref in pull request body #%d", pr.GetNumber())
 			return refs[0], nil
 		}
@@ -192,11 +192,11 @@ func searchForkCommitRef(ctx context.Context, client *github.Client, req *Reques
 	if err != nil {
 		return 0, err
 	}
-	if commitRefsAreAmbiguos(refs) {
-		url := fmt.Sprintf("https://github.com/%s/%s/commit/%s)", req.ForkOrg, req.ForkRepo, c.SHA())
-		return 0, fmt.Errorf("commit message contains multiple upstream repo refs and may be ambiguous: %s", url)
-	}
 	if len(refs) > 0 {
+		if commitRefsAreAmbiguos(refs) {
+			url := fmt.Sprintf("https://github.com/%s/%s/commit/%s", req.ForkOrg, req.ForkRepo, c.SHA())
+			logrus.Warnf("commit message contains multiple upstream repo refs and may be ambiguous: %s", url)
+		}
 		logrus.Infof("found ref in commit message of %s", c.SHA())
 		return refs[0], nil
 	}
@@ -211,11 +211,11 @@ func searchForkCommitRef(ctx context.Context, client *github.Client, req *Reques
 		if err != nil {
 			return 0, err
 		}
-		if commitRefsAreAmbiguos(refs) {
-			url := fmt.Sprintf("https://github.com/%s/%s/commit/%s)", req.ForkOrg, req.ForkRepo, c.SHA())
-			return 0, fmt.Errorf("commit comment contains multiple upstream repo refs and may be ambiguous: %s", url)
-		}
 		if len(refs) > 0 {
+			if commitRefsAreAmbiguos(refs) {
+				url := fmt.Sprintf("https://github.com/%s/%s/commit/%s", req.ForkOrg, req.ForkRepo, c.SHA())
+				logrus.Warnf("commit comment contains multiple upstream repo refs and may be ambiguous: %s", url)
+			}
 			logrus.Infof("found ref in one comment body of %s", c.SHA())
 			return refs[0], nil
 		}
