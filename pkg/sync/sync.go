@@ -81,7 +81,14 @@ func applyAllPatches(ctx context.Context, git utils.GitHelper, req *Request, sca
 				return multierror.Append(err, recoveryErr, git.Do("reset", "--hard"))
 			}
 			recovered = true
-			continueErr := git.Do("cherry-pick", "--allow-empty", "--continue")
+			if hasChanges, changesErr := git.HasLocalChanges(); changesErr != nil {
+				logrus.Error("failed checking for remaining changes, reverting patch")
+				return multierror.Append(err, changesErr, git.Do("reset", "--hard"))
+			} else if !hasChanges {
+				logrus.Warn("cherry-pick is now empty possibly due to conflict resolution, skipping commit")
+				continue
+			}
+			continueErr := git.Do("cherry-pick", "--continue")
 			if continueErr != nil {
 				logrus.Error("failed continuing cherry-pick, reverting patch")
 				return multierror.Append(err, continueErr, git.Do("reset", "--hard"))
