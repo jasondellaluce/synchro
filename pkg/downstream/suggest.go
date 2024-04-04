@@ -4,6 +4,9 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
+	"math"
+	"net/http"
 	"os"
 	"strings"
 	"time"
@@ -64,29 +67,30 @@ func Suggest(ctx context.Context, git utils.GitHelper, client *github.Client, re
 			if len(msgLines) == 0 {
 				return fmt.Errorf("found commit with empty body: %s", c.GetSHA())
 			}
-			out, err := git.DoOutput("log", "--fixed-strings", "--grep", msgLines[0])
+			out, err := git.DoOutput("log", "--fixed-strings", "--pretty=format:%h", "--grep", msgLines[0])
 			if err != nil {
 				return err
 			}
-			if len(out) > 0 {
+			found := strings.Split(out, "\n")
+			hasCommit, err := hasCommit(git, req, found, c.GetCommit())
+			if err != nil {
+				return err
+			}
+			if hasCommit {
 				numFoundCommits++
 			}
 			numCommits++
 		}
 
-		// it may happen that a PR has been partially downstreamed in
-		// the fork and some of its commits have been discarded. In such
-		// a case, we'll not suggest it as a dowstream candidate but we'll
-		// log it for sake of transparency
-		if numFoundCommits > 0 && numFoundCommits < numCommits {
-			logrus.Warningf("pull request %d has been partially ported (%d/%d commits): %s", v.GetNumber(), numFoundCommits, numCommits, v.GetHTMLURL())
-		}
-
-		// if none of the PR's commit are present in the downstream fork
+		// if less than the 50% of the PR's commit are present in the downstream fork
 		// history (checked from the provided head), then we can conclude
 		// that the PR is a good candidate to be downstreamed.
-		if numFoundCommits == 0 {
+		const k float64 = 0.5
+		threshold := (int)(math.Ceil(float64(numCommits) * k))
+		if numFoundCommits < threshold {
 			fmt.Fprintf(os.Stdout, "%d, %s, %s\n", v.GetNumber(), v.GetHTMLURL(), v.GetTitle())
+		} else {
+			logrus.Warningf("skipping already ported PR %d (%d/%d commits): %s", v.GetNumber(), numFoundCommits, numCommits, v.GetHTMLURL())
 		}
 
 		return nil
@@ -120,4 +124,78 @@ func iteratePullRequestCommits(ctx context.Context, client *github.Client, org, 
 		func(o *github.ListOptions) ([]*github.RepositoryCommit, *github.Response, error) {
 			return client.PullRequests.ListCommits(ctx, org, repo, prNum, o)
 		})
+}
+
+func hasCommit(git utils.GitHelper, req *SuggestRequest, found []string, c *github.Commit) (bool, error) {
+	has_commit := false
+	for _, commit := range found {
+		has, err := compareDiff(git, req, commit, c.GetURL())
+		if err != nil {
+			return false, err
+		}
+		has_commit = has
+	}
+
+	return has_commit, nil
+}
+
+func compareDiff(git utils.GitHelper, req *SuggestRequest, c string, u string) (bool, error) {
+	if len(c) == 0 {
+		return false, nil
+	}
+	remoteDiff, err := pullRemoteDiff(req, u)
+	if err != nil {
+		return false, err
+	}
+	localDiff, err := git.DoOutput("show", "--pretty=format:%n", c)
+	if err != nil {
+		return false, err
+	}
+	remoteDiffLines := strings.Split(strings.TrimSuffix(remoteDiff, "\n"), "\n")
+	localDiffLines := strings.Split(strings.TrimSuffix(localDiff, "\n"), "\n")
+
+	//iterate from back and remove empty lines
+	for i := len(remoteDiffLines) - 1; i >= 0; i-- {
+		if remoteDiffLines[i] == " " {
+			remoteDiffLines = append(remoteDiffLines[:i], remoteDiffLines[i+1:]...)
+		}
+	}
+
+	for i := len(localDiffLines) - 1; i >= 0; i-- {
+		if localDiffLines[i] == " " {
+			localDiffLines = append(localDiffLines[:i], localDiffLines[i+1:]...)
+		}
+	}
+
+	//remote diff sometimes contains an extra blank space as last line
+	if remoteDiffLines[len(remoteDiffLines)-1] == " " {
+		remoteDiffLines = remoteDiffLines[:len(remoteDiffLines)-1]
+	}
+
+	if len(remoteDiffLines) != len(localDiffLines) {
+		return false, nil
+	}
+
+	for i, line := range remoteDiffLines {
+		if line != localDiffLines[i] && !strings.Contains(line, "index") && !strings.Contains(line, "@@") {
+			return false, nil
+		}
+	}
+
+	return true, nil
+}
+
+func pullRemoteDiff(req *SuggestRequest, u string) (string, error) {
+	hash := strings.Split(u, "/commits/")[1]
+	url := "https://github.com/" + req.UpstreamOrg + "/" + req.UpstreamRepo + "/commit/" + hash + ".diff"
+	resp, err := http.Get(url)
+	if err != nil {
+		return "", err
+	}
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return "", err
+	}
+
+	return string(body), nil
 }
