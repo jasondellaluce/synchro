@@ -2,12 +2,12 @@ package judge
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"strings"
 
 	"github.com/jasondellaluce/synchro/pkg/utils"
-	"github.com/sirupsen/logrus"
 )
 
 type ChangeType int
