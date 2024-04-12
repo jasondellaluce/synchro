@@ -62,7 +62,8 @@ func Judge(ctx context.Context, git utils.GitHelper, commit string) error {
 	}
 
 	if (modified + added + deleted + renamed) > 1 {
-		logrus.Errorf("commits can either have modified, added, deleted or renamed files and not a combination of those")
+		err = errors.New("commits must have either modified, added, deleted or renamed files, and not a combination of those")
+		fmt.Fprintln(os.Stdout, err.Error())
 
 		for _, change := range changes {
 			if modified != 0 && change.Type == Modify {
