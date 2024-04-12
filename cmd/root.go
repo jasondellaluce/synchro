@@ -6,6 +6,7 @@ import (
 	"github.com/jasondellaluce/synchro/cmd/conflict"
 	"github.com/jasondellaluce/synchro/cmd/downstream"
 	"github.com/jasondellaluce/synchro/cmd/explain"
+	"github.com/jasondellaluce/synchro/cmd/judge"
 	"github.com/jasondellaluce/synchro/cmd/readme"
 	"github.com/jasondellaluce/synchro/cmd/sync"
 	"github.com/jasondellaluce/synchro/pkg/utils"
@@ -24,6 +25,7 @@ func init() {
 	rootCmd.AddCommand(explain.ExplainCmd)
 	rootCmd.AddCommand(conflict.ConflictCmd)
 	rootCmd.AddCommand(downstream.DownstreamCmd)
+	rootCmd.AddCommand(judge.JudgeCmd)
 }
 
 var rootCmd = &cobra.Command{
