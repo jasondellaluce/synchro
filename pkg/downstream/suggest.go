@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"io"
 	"math"
-	"net/http"
 	"os"
 	"strings"
 	"time"
@@ -72,7 +71,7 @@ func Suggest(ctx context.Context, git utils.GitHelper, client *github.Client, re
 				return err
 			}
 			found := strings.Split(out, "\n")
-			hasCommit, err := hasCommit(git, req, found, c.GetCommit())
+			hasCommit, err := hasCommit(ctx, git, client, req, found, c.GetCommit())
 			if err != nil {
 				return err
 			}
@@ -126,24 +125,25 @@ func iteratePullRequestCommits(ctx context.Context, client *github.Client, org, 
 		})
 }
 
-func hasCommit(git utils.GitHelper, req *SuggestRequest, found []string, c *github.Commit) (bool, error) {
-	has_commit := false
+func hasCommit(ctx context.Context, git utils.GitHelper, client *github.Client, req *SuggestRequest, found []string, c *github.Commit) (bool, error) {
 	for _, commit := range found {
-		has, err := compareDiff(git, req, commit, c.GetURL())
+		has, err := compareDiff(ctx, git, client, req, commit, c.GetURL())
 		if err != nil {
 			return false, err
 		}
-		has_commit = has
+		if has {
+			return true, nil
+		}
 	}
 
-	return has_commit, nil
+	return false, nil
 }
 
-func compareDiff(git utils.GitHelper, req *SuggestRequest, c string, u string) (bool, error) {
+func compareDiff(ctx context.Context, git utils.GitHelper, client *github.Client, req *SuggestRequest, c string, u string) (bool, error) {
 	if len(c) == 0 {
 		return false, nil
 	}
-	remoteDiff, err := pullRemoteDiff(req, u)
+	remoteDiff, err := pullRemoteDiff(ctx, client, req, u)
 	if err != nil {
 		return false, err
 	}
@@ -151,33 +151,18 @@ func compareDiff(git utils.GitHelper, req *SuggestRequest, c string, u string) (
 	if err != nil {
 		return false, err
 	}
-	remoteDiffLines := strings.Split(strings.TrimSuffix(remoteDiff, "\n"), "\n")
-	localDiffLines := strings.Split(strings.TrimSuffix(localDiff, "\n"), "\n")
+	remoteDiffLines := strings.Split(strings.Trim(remoteDiff, "\n"), "\n")
+	localDiffLines := strings.Split(strings.Trim(localDiff, "\n"), "\n")
 
-	//iterate from back and remove empty lines
-	for i := len(remoteDiffLines) - 1; i >= 0; i-- {
-		if remoteDiffLines[i] == " " {
-			remoteDiffLines = append(remoteDiffLines[:i], remoteDiffLines[i+1:]...)
-		}
-	}
-
-	for i := len(localDiffLines) - 1; i >= 0; i-- {
-		if localDiffLines[i] == " " {
-			localDiffLines = append(localDiffLines[:i], localDiffLines[i+1:]...)
-		}
-	}
-
-	//remote diff sometimes contains an extra blank space as last line
-	if remoteDiffLines[len(remoteDiffLines)-1] == " " {
-		remoteDiffLines = remoteDiffLines[:len(remoteDiffLines)-1]
-	}
+	remoteDiffLines = sanitizeDiff(remoteDiffLines)
+	localDiffLines = sanitizeDiff(localDiffLines)
 
 	if len(remoteDiffLines) != len(localDiffLines) {
 		return false, nil
 	}
 
 	for i, line := range remoteDiffLines {
-		if line != localDiffLines[i] && !strings.Contains(line, "index") && !strings.Contains(line, "@@") {
+		if line != localDiffLines[i] && !strings.HasPrefix(line, "index") && !strings.HasPrefix(line, "@@") {
 			return false, nil
 		}
 	}
@@ -185,17 +170,44 @@ func compareDiff(git utils.GitHelper, req *SuggestRequest, c string, u string) (
 	return true, nil
 }
 
-func pullRemoteDiff(req *SuggestRequest, u string) (string, error) {
-	hash := strings.Split(u, "/commits/")[1]
-	url := "https://github.com/" + req.UpstreamOrg + "/" + req.UpstreamRepo + "/commit/" + hash + ".diff"
-	resp, err := http.Get(url)
+func pullRemoteDiff(ctx context.Context, client *github.Client, req *SuggestRequest, u string) (string, error) {
+	// do some input checks
+	tokens := strings.Split(u, "/commits/")
+	if len(tokens) < 2 {
+		return "", fmt.Errorf("can't find commit hash in string: %s", u)
+	}
+
+	// retrieve commit through GitHub APIs
+	hash := tokens[1]
+	commit, _, err := client.Repositories.GetCommit(ctx, req.UpstreamOrg, req.UpstreamRepo, hash, nil)
 	if err != nil {
 		return "", err
 	}
-	body, err := io.ReadAll(resp.Body)
+	if commit.HTMLURL == nil {
+		return "", fmt.Errorf("can't find HTML url for commit: %s", hash)
+	}
+
+	// in GitHub, by convention adding ".diff" to the HTML url returns the commit's diff.
+	url := commit.GetHTMLURL() + ".diff"
+
+	// perform the get request with the GitHub client to preserve authentication
+	resp, err := client.Client().Get(url)
 	if err != nil {
 		return "", err
 	}
 
+	// read commit's diff -- bound read size to 100 MB as we can't trust anyone
+	body, err := io.ReadAll(io.LimitReader(resp.Body, 100*1024*1024))
+	if err != nil {
+		return "", err
+	}
 	return string(body), nil
+}
+
+func sanitizeDiff(lines []string) []string {
+	for len(lines) > 0 && lines[len(lines)-1] == " " {
+		lines = lines[:len(lines)-1]
+	}
+
+	return lines
 }
