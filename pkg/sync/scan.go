@@ -188,7 +188,8 @@ func searchForkCommitRef(ctx context.Context, client *github.Client, req *Reques
 	}
 
 	// search in commit message
-	refs, err := searchPullRequestRefs(req.UpstreamOrg, req.UpstreamRepo, c.Message())
+	// note(mrgian): we don't need to search in commit messages for now
+	/*refs, err := searchPullRequestRefs(req.UpstreamOrg, req.UpstreamRepo, c.Message())
 	if err != nil {
 		return 0, err
 	}
@@ -199,7 +200,7 @@ func searchForkCommitRef(ctx context.Context, client *github.Client, req *Reques
 		}
 		logrus.Infof("found ref in commit message of %s", c.SHA())
 		return refs[0], nil
-	}
+	}*/
 
 	// search in commit comments
 	comments, err := c.getComments(ctx, client, req.ForkOrg, req.ForkRepo)
