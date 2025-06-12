@@ -3,6 +3,7 @@ package cmd
 import (
 	"os"
 
+	"github.com/jasondellaluce/synchro/cmd/cache"
 	"github.com/jasondellaluce/synchro/cmd/conflict"
 	"github.com/jasondellaluce/synchro/cmd/downstream"
 	"github.com/jasondellaluce/synchro/cmd/explain"
@@ -26,6 +27,7 @@ func init() {
 	rootCmd.AddCommand(conflict.ConflictCmd)
 	rootCmd.AddCommand(downstream.DownstreamCmd)
 	rootCmd.AddCommand(judge.JudgeCmd)
+	rootCmd.AddCommand(cache.CacheCmd)
 }
 
 var rootCmd = &cobra.Command{

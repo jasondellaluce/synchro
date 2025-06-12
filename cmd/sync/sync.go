@@ -5,7 +5,9 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/google/go-github/v56/github"
 	"github.com/hashicorp/go-multierror"
+	"github.com/jasondellaluce/synchro/pkg/cache"
 	"github.com/jasondellaluce/synchro/pkg/sync"
 	"github.com/jasondellaluce/synchro/pkg/utils"
 	"github.com/spf13/cobra"
@@ -18,10 +20,12 @@ var (
 	syncRepo         string
 	syncRepoUpstream string
 	syncHeadUpstream string
+	syncCache        bool
 )
 
 func init() {
 	SyncCmd.Flags().BoolVar(&syncDryRun, "dryrun", false, "preview the sync changes")
+	SyncCmd.Flags().BoolVar(&syncCache, "cache", false, "enable the GitHub API cache")
 	SyncCmd.Flags().StringVarP(&syncBranch, "branch", "b", "", "the fork's synched output branch")
 	SyncCmd.Flags().StringVarP(&syncHead, "head", "c", "", "the head ref of the fork from which commits are scanned")
 	SyncCmd.Flags().StringVarP(&syncRepo, "repo", "r", "", "the GitHub repository of the fork in the form <org>/<repo>")
@@ -63,7 +67,18 @@ var SyncCmd = &cobra.Command{
 		}
 
 		ctx := context.Background()
-		client := utils.GetGithubClient()
+		var client *github.Client
+		if syncCache {
+			var err error
+			baseClient := utils.GetGithubClient()
+			client, err = cache.NewCachingClient(baseClient)
+			if err != nil {
+				return fmt.Errorf("failed to create caching client: %w", err)
+			}
+		} else {
+			client = utils.GetGithubClient()
+		}
+
 		return sync.Sync(
 			ctx,
 			utils.NewGitHelper(),
