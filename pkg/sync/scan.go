@@ -10,6 +10,7 @@ import (
 	"github.com/google/go-github/v56/github"
 	"github.com/jasondellaluce/synchro/pkg/utils"
 	"github.com/sirupsen/logrus"
+	"golang.org/x/sync/errgroup"
 )
 
 // Scan analyzes both the upstream and the fork repositories specified in the given
@@ -49,22 +50,42 @@ func scanRepoCommit(ctx context.Context, client *github.Client, req *Request, c 
 	res := &commitInfo{Commit: c}
 	logrus.Infof("scanning commit %s %s", res.SHA(), res.Title())
 
-	logrus.Debugf("listing pull requests in fork repository %s/%s", req.ForkOrg, req.ForkRepo)
-	pulls, err := utils.CollectSequence(iteratePullRequestsByCommitSHA(ctx, client, req.ForkOrg, req.ForkRepo, res.SHA()))
-	if err != nil {
+	var forkPRs []*github.PullRequest
+	var upstreamPRs []*github.PullRequest
+	var comments []*github.RepositoryComment
+	g, gCtx := errgroup.WithContext(ctx)
+
+	g.Go(func() error {
+		logrus.Debugf("listing pull requests in fork repository %s/%s", req.ForkOrg, req.ForkRepo)
+		var err error
+		forkPRs, err = utils.CollectSequence(iteratePullRequestsByCommitSHA(gCtx, client, req.ForkOrg, req.ForkRepo, res.SHA()))
+		return err
+	})
+
+	g.Go(func() error {
+		logrus.Debugf("listing pull requests in upstream repository %s/%s", req.UpstreamOrg, req.UpstreamRepo)
+		var err error
+		upstreamPRs, err = utils.CollectSequence(iteratePullRequestsByCommitSHA(gCtx, client, req.UpstreamOrg, req.UpstreamRepo, res.SHA()))
+		if err != nil {
+			logrus.Debugf("commit probably not found in upstream repo, purposely ignoring error: %s", err.Error())
+			return nil
+		}
+		return nil
+	})
+
+	g.Go(func() error {
+		var err error
+		comments, err = res.getComments(gCtx, client, req.ForkOrg, req.ForkRepo)
+		return err
+	})
+
+	if err := g.Wait(); err != nil {
 		return nil, err
 	}
-	res.PullRequests = pulls
 
-	logrus.Debugf("listing pull requests in upstream repository %s/%s", req.UpstreamOrg, req.UpstreamRepo)
-	pulls, err = utils.CollectSequence(iteratePullRequestsByCommitSHA(ctx, client, req.UpstreamOrg, req.UpstreamRepo, res.SHA()))
-	if err != nil {
-		logrus.Debugf("commit probably not found in upstream repo, purposely ignoring error: %s", err.Error())
-	} else {
-		res.PullRequests = append(res.PullRequests, pulls...)
-	}
+	res.PullRequests = append(forkPRs, upstreamPRs...)
 
-	ref, err := searchForkCommitRef(ctx, client, req, res)
+	ref, err := searchForkCommitRef(ctx, client, req, res, comments)
 	if err != nil {
 		return nil, err
 	}
@@ -88,7 +109,7 @@ func scanRepoCommit(ctx context.Context, client *github.Client, req *Request, c 
 	}
 
 	logrus.Debugf("commit is being picked, checking if we should ignore it")
-	err = searchCommitMarkers(ctx, client, req, res)
+	err = searchCommitMarkers(ctx, client, req, res, comments)
 	if err != nil {
 		return nil, err
 	}
@@ -170,7 +191,7 @@ func searchPullRequestRefs(org, repo, text string) ([]int, error) {
 }
 
 // returns the pull request number relative to the upstream repo
-func searchForkCommitRef(ctx context.Context, client *github.Client, req *Request, c *commitInfo) (int, error) {
+func searchForkCommitRef(ctx context.Context, client *github.Client, req *Request, c *commitInfo, comments []*github.RepositoryComment) (int, error) {
 	// search in pull request body
 	for _, pr := range c.pullRequestsOfRepo(req.ForkOrg, req.ForkRepo) {
 		refs, err := searchPullRequestRefs(req.UpstreamOrg, req.UpstreamRepo, pr.GetBody())
@@ -203,10 +224,6 @@ func searchForkCommitRef(ctx context.Context, client *github.Client, req *Reques
 	}*/
 
 	// search in commit comments
-	comments, err := c.getComments(ctx, client, req.ForkOrg, req.ForkRepo)
-	if err != nil {
-		return 0, err
-	}
 	for _, comment := range comments {
 		refs, err := searchPullRequestRefs(req.UpstreamOrg, req.UpstreamRepo, comment.GetBody())
 		if err != nil {
@@ -226,7 +243,7 @@ func searchForkCommitRef(ctx context.Context, client *github.Client, req *Reques
 }
 
 // returns true if the commit should be ignored for the given scan request
-func searchCommitMarkers(ctx context.Context, client *github.Client, req *Request, c *commitInfo) error {
+func searchCommitMarkers(ctx context.Context, client *github.Client, req *Request, c *commitInfo, comments []*github.RepositoryComment) error {
 	c.Markers = make(map[string]bool)
 
 	// search in commit's message
@@ -237,10 +254,6 @@ func searchCommitMarkers(ctx context.Context, client *github.Client, req *Reques
 	}
 
 	// search in commit's comments
-	comments, err := c.getComments(ctx, client, req.ForkOrg, req.ForkRepo)
-	if err != nil {
-		return err
-	}
 	for _, comment := range comments {
 		for _, m := range AllCommitMarkers {
 			if strings.Contains(comment.GetBody(), m.String()) {
