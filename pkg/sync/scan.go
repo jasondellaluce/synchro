@@ -97,8 +97,15 @@ func scanRepoCommit(ctx context.Context, client *github.Client, req *Request, c 
 		}
 
 		if pr.MergedAt != nil {
-			logrus.Infof("refed pull request is MERGED, skipping commit")
-			return nil, nil
+			mergedInUpstreamHead, err := isPullRequestMergedInUpstreamHead(ctx, client, req, pr)
+			if err != nil {
+				return nil, err
+			}
+			if mergedInUpstreamHead {
+				logrus.Infof("refed pull request is MERGED in upstream head %s, skipping commit", req.UpstreamHeadRef)
+				return nil, nil
+			}
+			logrus.Infof("refed pull request is MERGED, but not in upstream head %s, picking commit", req.UpstreamHeadRef)
 		} else if strings.ToLower(pr.GetState()) == "closed" {
 			logrus.Infof("refed pull request is CLOSED, picking commit")
 		} else {
@@ -262,4 +269,26 @@ func searchCommitMarkers(ctx context.Context, client *github.Client, req *Reques
 		}
 	}
 	return nil
+}
+
+// returns true if the merge commit of a PR is included in the configured
+// upstream head ref.
+func isPullRequestMergedInUpstreamHead(ctx context.Context, client *github.Client, req *Request, pr *github.PullRequest) (bool, error) {
+	mergeCommitSHA := pr.GetMergeCommitSHA()
+	if mergeCommitSHA == "" {
+		logrus.Warnf("missing merge commit sha for merged pull request #%d", pr.GetNumber())
+		return false, nil
+	}
+
+	cmp, _, err := client.Repositories.CompareCommits(ctx, req.UpstreamOrg, req.UpstreamRepo, mergeCommitSHA, req.UpstreamHeadRef, nil)
+	if err != nil {
+		return false, err
+	}
+
+	// In GitHub compare API semantics:
+	// - "ahead": head includes base plus additional commits
+	// - "identical": head equals base
+	// Both cases mean the merge commit is included in upstream head.
+	status := cmp.GetStatus()
+	return status == "ahead" || status == "identical", nil
 }
